@@ -47,9 +47,9 @@ models/
 *.gguf
 
 # Data
-data/
+!data/
+!data/majors.json
 *.csv
-*.json
 !docker-compose.yml
 !requirements.txt
 
