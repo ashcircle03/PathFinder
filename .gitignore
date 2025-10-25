@@ -53,6 +53,10 @@ models/
 !docker-compose.yml
 !requirements.txt
 
+# Prompts and Config (include these)
+!prompts/
+!config/
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
