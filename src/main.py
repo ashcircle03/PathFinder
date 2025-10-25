@@ -72,13 +72,15 @@ def health_check():
 async def recommend_major(request: InterestRequest):
     """학생의 관심사를 기반으로 대학 학과를 추천"""
 
-    prompt = f"""당신은 진로 상담 전문가입니다. 고등학생의 관심사를 분석하여 적합한 대학 학과를 추천해주세요.
+    prompt = f"""학생의 관심사: {request.interests}
 
-학생의 관심사: {request.interests}
+위 관심사를 가진 고등학생에게 적합한 대학 학과를 3-5개 추천하고, 각 학과가 학생의 관심사와 어떻게 연결되는지 구체적으로 설명해주세요.
 
 다음 형식으로 답변해주세요:
-1. 추천 학과 (3-5개, 쉼표로 구분)
-2. 추천 이유 (각 학과가 학생의 관심사와 어떻게 연결되는지 설명)
+1. 추천 학과: [학과명1, 학과명2, 학과명3, ...]
+2. 추천 이유: [각 학과를 추천하는 구체적인 이유]
+
+중요: 반드시 한국어로만 답변해주세요.
 
 추천 학과:"""
 
@@ -88,10 +90,18 @@ async def recommend_major(request: InterestRequest):
             model=OLLAMA_MODEL,
             messages=[
                 {
+                    'role': 'system',
+                    'content': '당신은 한국의 고등학생을 위한 진로 상담 전문가입니다. 학생의 관심사를 분석하여 적합한 대학 학과를 추천해주세요. 반드시 한국어로만 답변해주세요.'
+                },
+                {
                     'role': 'user',
                     'content': prompt
                 }
-            ]
+            ],
+            options={
+                'temperature': 0.7,
+                'num_predict': 512
+            }
         )
 
         # 응답 파싱

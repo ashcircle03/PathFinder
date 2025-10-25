@@ -8,8 +8,8 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 
 ### 기술 스택
 
-- **LLM**: Ollama + Llama 3.2:3b
-- **RAG**: Qdrant (Vector DB) + Sentence-Transformers
+- **LLM**: Ollama + Qwen2.5:32b (한국어 성능 우수)
+- **RAG**: Qdrant (Vector DB) + Sentence-Transformers (한국어 임베딩)
 - **API**: FastAPI
 - **컨테이너**: Docker, Docker Compose
 - **향후 계획**: LLMOps, Kubernetes
@@ -19,7 +19,18 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 ### 사전 요구사항
 
 - Docker & Docker Compose 설치
-- 최소 8GB RAM (LLM 실행용)
+- **GPU 필수**: NVIDIA GPU (RTX 3060 12GB 이상 권장, RTX 4070 최적)
+- **NVIDIA Container Toolkit** 설치 (GPU 사용)
+  ```bash
+  # Ubuntu/Debian
+  distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+  curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
+  curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+  sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+  sudo systemctl restart docker
+  ```
+- 최소 16GB RAM (32GB 권장)
+- 디스크 공간: 최소 20GB (모델 다운로드용)
 
 ### 설치 및 실행
 
@@ -170,8 +181,11 @@ PathFinder는 **RAG (Retrieval-Augmented Generation)** 기술을 활용하여 �
 
 ### 사용된 모델
 
+- **LLM**: Qwen2.5:32b (32B 파라미터, 한국어 성능 우수)
+  - 다국어 지원 (한국어, 영어, 중국어 등)
+  - 4bit 양자화 버전 자동 사용 (~10GB VRAM)
+  - RTX 4070 12GB에 최적화
 - **임베딩 모델**: `jhgan/ko-sroberta-multitask` (한국어 특화)
-- **LLM**: Llama 3.2:3b
 - **Vector DB**: Qdrant
 
 ## 개발
@@ -186,7 +200,7 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Ollama 로컬 설치 필요 (https://ollama.ai)
-ollama pull llama3.2:3b
+ollama pull qwen2.5:32b
 
 # 서버 실행
 uvicorn src.main:app --reload
@@ -218,13 +232,22 @@ docker-compose down -v
 - `docker-compose logs ollama`로 Ollama 상태 확인
 - 헬스체크 대기 (최대 1-2분 소요)
 
-### 메모리 부족
-- Docker Desktop 메모리 할당 증가 (최소 8GB)
-- 더 작은 모델 사용: `llama3.2:1b`
+### 메모리/VRAM 부족
+- Docker Desktop 메모리 할당 증가 (최소 16GB)
+- GPU 메모리 부족 시 더 작은 모델 사용:
+  - `qwen2.5:14b` (8GB VRAM)
+  - `qwen2.5:7b` (4GB VRAM)
+  - `llama3.2:3b` (2GB VRAM, 한국어 성능 낮음)
 
 ### 모델 다운로드 느림
-- 첫 실행 시 3-4GB 모델 다운로드로 시간 소요
+- 첫 실행 시 18-20GB 모델 다운로드로 시간 소요 (양자화 버전)
 - `/pull-model` 엔드포인트로 수동 다운로드
+- 네트워크 상태에 따라 30분~1시간 소요 가능
+
+### GPU 사용 확인
+- Ollama는 자동으로 GPU 감지 및 사용
+- `docker logs pathfinder-ollama`로 GPU 사용 확인
+- NVIDIA Docker Runtime 설치 필요 (GPU 사용 시)
 
 ## 라이선스
 

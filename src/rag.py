@@ -97,6 +97,8 @@ class MajorRecommendationRAG:
 1. 추천 학과: [학과명1, 학과명2, 학과명3, ...]
 2. 추천 이유: [각 학과를 추천하는 구체적인 이유]
 
+중요: 반드시 한국어로 답변해주세요.
+
 추천 학과:"""
 
         try:
@@ -106,13 +108,17 @@ class MajorRecommendationRAG:
                 messages=[
                     {
                         'role': 'system',
-                        'content': '당신은 진로 상담 전문가입니다. 학생의 관심사를 분석하여 적합한 대학 학과를 추천해주세요.'
+                        'content': '당신은 한국의 고등학생을 위한 진로 상담 전문가입니다. 학생의 관심사를 분석하여 적합한 대학 학과를 추천해주세요. 반드시 한국어로만 답변해주세요.'
                     },
                     {
                         'role': 'user',
                         'content': prompt
                     }
-                ]
+                ],
+                options={
+                    'temperature': 0.7,
+                    'num_predict': 512
+                }
             )
 
             llm_response = response['message']['content']
