@@ -11,8 +11,9 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 - **LLM**: Ollama + Qwen2.5:32b (한국어 성능 우수)
 - **RAG**: Qdrant (Vector DB) + Sentence-Transformers (한국어 임베딩)
 - **API**: FastAPI
+- **LLMOps**: MLflow + Prometheus + Grafana + PostgreSQL ✨
 - **컨테이너**: Docker, Docker Compose
-- **향후 계획**: LLMOps, Kubernetes
+- **향후 계획**: Kubernetes
 
 ## 시작하기
 
@@ -69,6 +70,14 @@ curl http://localhost:8000/health
 curl http://localhost:8000/rag-health
 ```
 
+7. **LLMOps 대시보드 접속**
+```
+- Grafana: http://localhost:3000 (admin/admin)
+- Prometheus: http://localhost:9090
+- MLflow: http://localhost:5000
+- API Metrics: http://localhost:8000/metrics
+```
+
 ### API 사용 예시
 
 #### 1. 기본 학과 추천 (LLM만 사용)
@@ -92,6 +101,7 @@ curl -X POST http://localhost:8000/recommend-rag \
 #### 응답 예시
 ```json
 {
+  "recommendation_id": "550e8400-e29b-41d4-a716-446655440000",
   "recommended_majors": [
     "컴퓨터공학과",
     "소프트웨어학과",
@@ -113,6 +123,28 @@ curl -X POST http://localhost:8000/recommend-rag \
 }
 ```
 
+#### 3. 피드백 제출 (LLMOps)
+```bash
+curl -X POST http://localhost:8000/feedback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recommendation_id": "550e8400-e29b-41d4-a716-446655440000",
+    "rating": 5,
+    "is_helpful": true,
+    "selected_majors": ["컴퓨터공학과", "소프트웨어학과"],
+    "comment": "매우 도움이 되었습니다!"
+  }'
+```
+
+#### 4. LLMOps 통계 조회
+```bash
+# 피드백 통계 및 시스템 정보
+curl http://localhost:8000/llmops/stats
+
+# 프롬프트 버전 목록
+curl http://localhost:8000/llmops/prompts
+```
+
 ### API 문서
 
 서비스 실행 후 다음 URL에서 자동 생성된 API 문서를 확인할 수 있습니다:
@@ -125,15 +157,24 @@ curl -X POST http://localhost:8000/recommend-rag \
 ```
 PathFinder/
 ├── src/
-│   ├── main.py          # FastAPI 애플리케이션
-│   ├── rag.py           # RAG 시스템 (검색 증강 생성)
-│   └── initialize_db.py # Vector DB 초기화 스크립트
+│   ├── main.py            # FastAPI 애플리케이션 (LLMOps 통합)
+│   ├── rag.py             # RAG 시스템 (검색 증강 생성)
+│   ├── initialize_db.py   # Vector DB 초기화 스크립트
+│   ├── logging_config.py  # 구조화된 로깅 설정 ✨
+│   ├── metrics.py         # Prometheus 메트릭 수집 ✨
+│   ├── mlflow_tracker.py  # MLflow 실험 추적 ✨
+│   ├── prompt_manager.py  # 프롬프트 버전 관리 ✨
+│   └── feedback_db.py     # 피드백 데이터베이스 ✨
 ├── data/
-│   └── majors.json      # 학과 정보 데이터 (34개 학과)
-├── models/              # LLM 모델 캐시 (자동 생성)
-├── Dockerfile           # API 서버 이미지
-├── docker-compose.yml   # 서비스 오케스트레이션 (Ollama + Qdrant + API)
-├── requirements.txt     # Python 의존성
+│   └── majors.json        # 학과 정보 데이터 (34개 학과)
+├── prompts/
+│   └── prompts.yaml       # 프롬프트 버전 관리 파일 ✨
+├── config/
+│   └── prometheus.yml     # Prometheus 설정 ✨
+├── models/                # LLM 모델 캐시 (자동 생성)
+├── Dockerfile             # API 서버 이미지
+├── docker-compose.yml     # 서비스 오케스트레이션 (7개 서비스) ✨
+├── requirements.txt       # Python 의존성
 └── README.md
 ```
 
@@ -152,10 +193,14 @@ PathFinder/
 - [x] RAG 엔드포인트 구현
 - [x] 벡터 검색 + LLM 생성 파이프라인
 
-### Phase 3: LLMOps (예정)
-- [ ] MLflow 실험 추적
-- [ ] 프롬프트 버전 관리
-- [ ] 모니터링 (Prometheus + Grafana)
+### Phase 3: LLMOps ✅ (완료)
+- [x] MLflow 실험 추적
+- [x] 프롬프트 버전 관리 (YAML 기반)
+- [x] Prometheus 메트릭 수집
+- [x] Grafana 대시보드
+- [x] 구조화된 로깅 (structlog)
+- [x] 피드백 수집 시스템 (PostgreSQL)
+- [x] LLMOps API 엔드포인트
 
 ### Phase 4: Kubernetes (예정)
 - [ ] vLLM 전환
@@ -187,6 +232,77 @@ PathFinder는 **RAG (Retrieval-Augmented Generation)** 기술을 활용하여 �
   - RTX 4070 12GB에 최적화
 - **임베딩 모델**: `jhgan/ko-sroberta-multitask` (한국어 특화)
 - **Vector DB**: Qdrant
+
+## LLMOps 시스템 소개
+
+PathFinder는 **프로덕션 레벨 LLMOps**를 구현하여 AI 서비스의 품질, 성능, 신뢰성을 지속적으로 개선합니다.
+
+### 주요 기능
+
+#### 1. **실험 추적 (MLflow)**
+- 모든 추천 요청을 자동으로 추적
+- 프롬프트 버전, 모델 파라미터, 메트릭 기록
+- 실험 결과 비교 및 분석
+- 접속: http://localhost:5000
+
+#### 2. **성능 모니터링 (Prometheus + Grafana)**
+- 실시간 메트릭 수집 및 시각화
+- 응답 시간, 유사도 점수, 에러율 추적
+- 대시보드를 통한 시스템 상태 확인
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/admin)
+
+**수집되는 메트릭**:
+```python
+- 요청 수 (endpoint, method, status별)
+- 응답 시간 (평균, p50, p95, p99)
+- RAG 검색 시간
+- LLM 생성 시간
+- 유사도 점수 분포
+- 피드백 통계 (평점, 도움 여부)
+```
+
+#### 3. **프롬프트 버전 관리**
+- YAML 기반 프롬프트 버전 관리
+- 버전별 A/B 테스팅 가능
+- 프롬프트 롤백 지원
+- 파일 위치: `prompts/prompts.yaml`
+
+#### 4. **피드백 수집 시스템**
+- 사용자 피드백 자동 수집 (평점, 선택 학과, 코멘트)
+- PostgreSQL에 영구 저장
+- 피드백 통계 API 제공
+- 품질 개선을 위한 데이터 축적
+
+#### 5. **구조화된 로깅 (structlog)**
+- 모든 요청에 trace_id 부여
+- 구조화된 JSON 로그
+- 검색 및 분석 용이
+- 에러 추적 및 디버깅 지원
+
+### LLMOps 활용 시나리오
+
+```
+1. 개발자가 새로운 프롬프트 버전 작성 (prompts.yaml)
+2. 시스템에 배포
+3. MLflow에서 자동으로 실험 추적
+4. Grafana 대시보드에서 성능 모니터링
+5. 사용자 피드백 수집
+6. 데이터 기반 의사결정 (어떤 프롬프트가 더 나은지)
+7. 최적의 버전 선택 및 롤아웃
+```
+
+### Docker Services (7개)
+
+| 서비스 | 포트 | 역할 |
+|--------|------|------|
+| ollama | 11434 | LLM 서버 (Qwen2.5:32b) |
+| qdrant | 6333, 6334 | Vector DB |
+| postgres | 5432 | 피드백 데이터베이스 |
+| mlflow | 5000 | 실험 추적 |
+| prometheus | 9090 | 메트릭 수집 |
+| grafana | 3000 | 대시보드 |
+| api | 8000 | FastAPI 서버 |
 
 ## 개발
 
