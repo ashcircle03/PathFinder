@@ -26,12 +26,27 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 - **Augmentation (증강)**: 검색된 학과 정보를 컨텍스트로 제공
 - **Generation (생성)**: LLM이 맞춤형 추천 생성
 
+### 💬 대화형 진로 상담 (NEW!)
+
+- **ConversationChain**: 학생과 자연스러운 대화를 통한 관심사 파악
+- **Memory 관리**: 이전 대화 내용을 기억하며 맥락있는 상담 제공
+- **지능형 정보 수집**: 관심사, 과목, 성격, 진로 목표 자동 추출
+- **세션 관리**: 각 사용자별 독립적인 대화 세션 유지
+
+### 🏫 실제 대학 정보 기반 추천 (NEW!)
+
+- **대학 크롤러**: 주요 대학 입학처 정보 수집
+- **상세 정보**: 커리큘럼, 입학 정원, 졸업 요건, 웹사이트 링크
+- **10개 대학 x 5개 학과**: 총 50개 실제 대학 학과 정보
+- **Vector DB 통합**: 기본 학과(34개) + 대학 학과(50개) = 84개 벡터
+
 ### ✨ 핵심 특징
 
 1. **환각 방지**: RAG로 실제 학과 정보만 추천
 2. **한국어 최적화**: 한국어 특화 임베딩 + LLM
 3. **구조화된 출력**: Pydantic Output Parser 사용
 4. **유연한 프롬프트**: LangChain PromptTemplate
+5. **대화형 UX**: 자연스러운 대화를 통한 사용자 친화적 인터페이스
 
 ---
 
@@ -170,7 +185,65 @@ curl -X POST http://localhost:8000/search \
 
 빠른 응답이 필요하거나 검색 결과만 확인하고 싶을 때 유용합니다.
 
-#### 3. 개발자 도구
+#### 3. 대화형 진로 상담 (NEW!)
+
+**대화 시작:**
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "안녕하세요! 진로 상담 받고 싶어요",
+    "session_id": "user-12345"
+  }'
+```
+
+**응답 예시:**
+
+```json
+{
+  "session_id": "user-12345",
+  "response": "안녕하세요! 진로 상담을 도와드리겠습니다. 먼저 어떤 분야에 관심이 있으신가요?",
+  "is_ready_to_recommend": false,
+  "conversation_count": 1,
+  "collected_info": {
+    "interests": [],
+    "subjects": [],
+    "conversation_count": 1
+  }
+}
+```
+
+**대화 계속:**
+
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "저는 프로그래밍하고 게임 만드는 걸 좋아해요",
+    "session_id": "user-12345"
+  }'
+```
+
+**학과 추천 받기 (3-5회 대화 후):**
+
+```bash
+curl -X POST http://localhost:8000/chat/user-12345/recommend
+```
+
+**대화 이력 조회:**
+
+```bash
+curl http://localhost:8000/chat/user-12345/history
+```
+
+**세션 삭제:**
+
+```bash
+curl -X DELETE http://localhost:8000/chat/user-12345
+```
+
+#### 4. 개발자 도구
 
 ```bash
 # 현재 프롬프트 템플릿 확인
@@ -184,14 +257,17 @@ curl http://localhost:8000/debug/prompt
 ```
 PathFinder/
 ├── src/
-│   ├── main.py              # FastAPI 애플리케이션 (189줄)
-│   ├── rag.py              # LangChain RAG 시스템 (258줄)
-│   └── initialize_db.py    # Vector DB 초기화 (117줄)
+│   ├── main.py                # FastAPI 애플리케이션 (337줄)
+│   ├── rag.py                 # LangChain RAG 시스템 (262줄)
+│   ├── conversation.py        # 대화형 상담 시스템 (336줄) NEW!
+│   ├── university_crawler.py  # 대학 정보 크롤러 (312줄) NEW!
+│   └── initialize_db.py       # Vector DB 초기화 (192줄)
 ├── data/
-│   └── majors.json         # 학과 정보 (34개)
-├── docker-compose.yml      # 서비스 오케스트레이션 (3개 서비스)
-├── Dockerfile              # API 서버 이미지
-├── requirements.txt        # Python 의존성
+│   ├── majors.json            # 기본 학과 정보 (34개)
+│   └── university_departments.json  # 대학 학과 정보 (50개) NEW!
+├── docker-compose.yml         # 서비스 오케스트레이션 (4개 서비스)
+├── Dockerfile                 # API 서버 이미지
+├── requirements.txt           # Python 의존성
 └── README.md
 ```
 
@@ -204,19 +280,39 @@ PathFinder/
 ```
 사용자 관심사 입력
        ↓
-[임베딩 변환] (HuggingFace Embeddings)
+[임베딩 변환] (HuggingFaceEmbeddings)
        ↓
 [벡터 검색] (Qdrant VectorStore)
        ↓
-검색된 학과 정보 (Top 5)
+검색된 학과 정보 (Top 5) - 기본 34개 + 대학 50개
        ↓
 [프롬프트 구성] (PromptTemplate)
        ↓
-[LLM 생성] (Ollama)
+[LLM 생성] (Ollama - EXAONE-3.5-7.8B)
        ↓
 [출력 파싱] (PydanticOutputParser)
        ↓
 구조화된 추천 결과
+```
+
+### 대화형 상담 파이프라인 (NEW!)
+
+```
+사용자 메시지
+       ↓
+[ConversationChain] (LangChain)
+   ├─ PromptTemplate (상담사 페르소나)
+   ├─ ConversationBufferMemory (대화 이력 저장)
+   └─ OllamaLLM (한국어 대화 생성)
+       ↓
+상담사 응답 + 정보 추출
+   ├─ 관심사 키워드 추출
+   ├─ 과목 정보 수집
+   └─ 대화 횟수 카운트
+       ↓
+충분한 정보 수집 판단
+   ├─ NO → 대화 계속
+   └─ YES → RAG 파이프라인으로 학과 추천
 ```
 
 ### 주요 컴포넌트
@@ -354,12 +450,18 @@ docker-compose down -v
    - `page_content` + `metadata` 구조
    - 검색 및 필터링 용이
 
+6. **ConversationChain + Memory** (NEW!)
+   - 대화 이력 관리
+   - 맥락있는 상담 제공
+   - 세션별 독립적인 메모리
+
 ### 🎯 향후 확장 가능성
 
-- **ConversationChain**: 대화형 상담
+- **LangSmith**: 프로덕션 모니터링 및 추적
 - **Agent**: 여러 도구 조합 (웹 검색, 계산기 등)
-- **Memory**: 대화 이력 관리
-- **LangSmith**: 프로덕션 모니터링
+- **ConversationSummaryMemory**: 긴 대화 요약
+- **실제 웹 크롤링**: 주요 대학 입학처 실시간 정보 수집
+- **Redis 기반 세션 관리**: 분산 환경 지원
 
 ---
 
@@ -405,14 +507,23 @@ nvidia-smi
 - [x] Qdrant VectorStore 통합
 - [x] Pydantic Output Parser
 - [x] PromptTemplate 관리
+- [x] 기본 학과 정보 (34개) 벡터화
 
-### 🚧 Phase 2: 기능 확장 (진행 중)
-- [ ] 대화형 상담 (ConversationChain)
-- [ ] 프롬프트 버전 관리
-- [ ] 사용자 피드백 수집
+### ✅ Phase 2: 기능 확장 (완료)
+- [x] 대화형 상담 (ConversationChain + Memory)
+- [x] 대학 입학처 정보 크롤러
+- [x] 실제 대학 학과 데이터 통합 (50개)
+- [x] 세션 기반 대화 관리
 
-### 📅 Phase 3: 프로덕션 (계획)
+### 🚧 Phase 3: UX 개선 (진행 중)
+- [ ] Frontend 채팅 UI 구현
+- [ ] 대화 히스토리 시각화
+- [ ] 추천 결과 상세 페이지
+
+### 📅 Phase 4: 프로덕션 (계획)
 - [ ] LangSmith 통합
+- [ ] Redis 기반 세션 관리
+- [ ] 실시간 웹 크롤링
 - [ ] 캐싱 및 성능 최적화
 - [ ] A/B 테스팅
 
