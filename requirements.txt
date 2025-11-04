@@ -1,18 +1,22 @@
+# FastAPI
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
-langchain==0.3.7
-langchain-community==0.3.5
-langchain-qdrant==0.1.4
-ollama==0.3.3
 pydantic==2.9.2
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
+
+# LangChain Core
+langchain==0.3.7
+langchain-community==0.3.5
+langchain-core==0.3.15
+
+# LangChain Integrations
+langchain-qdrant==0.1.4
+langchain-ollama==0.2.0
+
+# Vector Store & Embeddings
 qdrant-client==1.11.3
 sentence-transformers==3.3.1
 
-# LLMOps
-mlflow==2.15.1
-prometheus-client==0.20.0
-structlog==24.4.0
-psycopg2-binary==2.9.9
-pyyaml==6.0.1
+# Ollama
+ollama==0.3.3

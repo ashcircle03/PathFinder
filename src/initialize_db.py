@@ -1,118 +1,127 @@
 """
-Vector DB 초기화 스크립트
-학과 정보를 임베딩하여 Qdrant에 저장합니다.
+LangChain 기반 Qdrant Vector DB 초기화 스크립트
 """
 import json
 import os
-from pathlib import Path
+from typing import List
+from langchain_qdrant import QdrantVectorStore
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
-from sentence_transformers import SentenceTransformer
+from qdrant_client.models import Distance, VectorParams
 
 
-def load_majors_data(data_path: str = "/app/data/majors.json"):
-    """학과 데이터를 로드합니다."""
-    if not os.path.exists(data_path):
-        # Docker 환경이 아닌 경우 상대 경로 시도
-        data_path = Path(__file__).parent.parent / "data" / "majors.json"
+def load_majors_data() -> List[dict]:
+    """학과 데이터 로드"""
+    data_path = os.path.join(os.path.dirname(__file__), "../data/majors.json")
 
     with open(data_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        majors = json.load(f)
+
+    print(f"✅ 학과 데이터 로드 완료: {len(majors)}개")
+    return majors
 
 
-def create_major_text(major: dict) -> str:
-    """학과 정보를 텍스트로 변환합니다."""
-    text_parts = [
-        f"학과명: {major['name']}",
-        f"분야: {major['category']}",
-        f"설명: {major['description']}",
-        f"관련 키워드: {', '.join(major['keywords'])}",
-        f"진로: {', '.join(major['career_paths'])}",
-        f"관련 교과: {', '.join(major['related_subjects'])}",
-        f"필요 역량: {', '.join(major['skills_required'])}"
-    ]
-    return "\n".join(text_parts)
+def create_documents(majors: List[dict]) -> List[Document]:
+    """학과 데이터를 LangChain Document로 변환"""
+    documents = []
+
+    for major in majors:
+        # page_content: 검색 대상이 되는 주요 텍스트
+        content = f"{major['name']} - {major['description']}"
+
+        # metadata: 추가 정보 (필터링, 반환 시 사용)
+        metadata = {
+            "id": major["id"],
+            "name": major["name"],
+            "category": major["category"],
+            "keywords": major["keywords"],
+            "career_paths": major["career_paths"],
+            "related_subjects": major["related_subjects"],
+            "skills_required": major["skills_required"]
+        }
+
+        doc = Document(page_content=content, metadata=metadata)
+        documents.append(doc)
+
+    print(f"✅ Document 변환 완료: {len(documents)}개")
+    return documents
 
 
 def initialize_qdrant():
-    """Qdrant 벡터 DB를 초기화하고 학과 데이터를 임베딩하여 저장합니다."""
-    # Qdrant 클라이언트 초기화
+    """Qdrant Vector Store 초기화"""
+    # 환경 변수
     qdrant_host = os.getenv("QDRANT_HOST", "http://localhost:6333")
-    client = QdrantClient(url=qdrant_host)
-
-    # 임베딩 모델 로드 (한국어 지원 모델)
-    print("임베딩 모델 로드 중...")
-    model = SentenceTransformer('jhgan/ko-sroberta-multitask')
-
-    # 컬렉션 이름
     collection_name = "majors"
 
-    # 기존 컬렉션이 있다면 삭제
-    try:
-        client.delete_collection(collection_name=collection_name)
-        print(f"기존 컬렉션 '{collection_name}' 삭제됨")
-    except Exception:
-        pass
+    print("🚀 Qdrant Vector DB 초기화 시작...")
 
-    # 새 컬렉션 생성
-    print(f"컬렉션 '{collection_name}' 생성 중...")
-    client.create_collection(
-        collection_name=collection_name,
-        vectors_config=VectorParams(size=768, distance=Distance.COSINE),
-    )
-
-    # 학과 데이터 로드
-    print("학과 데이터 로드 중...")
+    # 1. 학과 데이터 로드
     majors = load_majors_data()
 
-    # 각 학과에 대해 임베딩 생성 및 저장
-    print("학과 정보 임베딩 및 저장 중...")
-    points = []
+    # 2. LangChain Document로 변환
+    documents = create_documents(majors)
 
-    for major in majors:
-        # 학과 정보를 텍스트로 변환
-        major_text = create_major_text(major)
-
-        # 임베딩 생성
-        embedding = model.encode(major_text).tolist()
-
-        # 포인트 생성
-        point = PointStruct(
-            id=major['id'],
-            vector=embedding,
-            payload={
-                "name": major['name'],
-                "category": major['category'],
-                "description": major['description'],
-                "keywords": major['keywords'],
-                "career_paths": major['career_paths'],
-                "related_subjects": major['related_subjects'],
-                "skills_required": major['skills_required'],
-                "full_text": major_text
-            }
-        )
-        points.append(point)
-
-    # 배치로 저장
-    client.upsert(
-        collection_name=collection_name,
-        points=points
+    # 3. 임베딩 모델 초기화 (한국어 특화)
+    print("📦 임베딩 모델 로딩 중...")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="jhgan/ko-sroberta-multitask",
+        model_kwargs={'device': 'cpu'},
+        encode_kwargs={'normalize_embeddings': True}
     )
 
-    print(f"✅ {len(points)}개 학과 정보가 벡터 DB에 저장되었습니다!")
+    # 4. Qdrant 클라이언트 초기화
+    print(f"🔗 Qdrant 연결: {qdrant_host}")
+    qdrant_client = QdrantClient(url=qdrant_host)
 
-    # 저장된 데이터 확인
-    collection_info = client.get_collection(collection_name=collection_name)
-    print(f"컬렉션 정보: {collection_info}")
+    # 5. 기존 컬렉션 삭제 (있다면)
+    try:
+        qdrant_client.delete_collection(collection_name)
+        print(f"🗑️  기존 컬렉션 '{collection_name}' 삭제")
+    except Exception:
+        print(f"ℹ️  기존 컬렉션 없음")
 
-    return client, model
+    # 6. 새 컬렉션 생성 및 데이터 저장
+    print("💾 벡터 DB에 데이터 저장 중...")
+
+    vectorstore = QdrantVectorStore.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        url=qdrant_host,
+        collection_name=collection_name,
+        force_recreate=True  # 컬렉션 강제 재생성
+    )
+
+    # 7. 저장 확인
+    collection_info = qdrant_client.get_collection(collection_name)
+
+    # vectors가 dict인 경우와 객체인 경우 모두 처리
+    vectors_config = collection_info.config.params.vectors
+    if isinstance(vectors_config, dict):
+        # 단일 벡터 설정 (dict)
+        vector_size = list(vectors_config.values())[0].size
+        vector_distance = list(vectors_config.values())[0].distance
+    else:
+        # VectorParams 객체
+        vector_size = vectors_config.size
+        vector_distance = vectors_config.distance
+
+    print("=" * 60)
+    print("✅ Qdrant Vector DB 초기화 완료!")
+    print(f"   - 컬렉션: {collection_name}")
+    print(f"   - 벡터 수: {collection_info.points_count}")
+    print(f"   - 벡터 차원: {vector_size}")
+    print(f"   - 거리 메트릭: {vector_distance}")
+    print("=" * 60)
+
+    return {
+        "collection_name": collection_name,
+        "vectors_count": collection_info.points_count,
+        "vector_dim": vector_size,
+        "embedding_model": "jhgan/ko-sroberta-multitask"
+    }
 
 
 if __name__ == "__main__":
-    print("=== Qdrant Vector DB 초기화 시작 ===")
-    try:
-        initialize_qdrant()
-        print("=== 초기화 완료 ===")
-    except Exception as e:
-        print(f"❌ 초기화 실패: {e}")
-        raise
+    # 직접 실행 시 초기화
+    initialize_qdrant()

@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Tests
+tests/
+test/
+*_test.py
+test_*.py
+
+# MLflow & Metrics (프로덕션에 불필요)
+mlruns/
+mlflow.db
+*.db
+
+# Prometheus (프로덕션에 불필요)
+config/
+
+# Frontend
+frontend/
+node_modules/
+
+# Misc
+.DS_Store
+.env.example
+*.log
+2022105461.txt

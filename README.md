@@ -1,6 +1,6 @@
 # PathFinder
 
-고등학생 대학 학과 매칭 서비스 - RAG & LLMOps 기반
+**LangChain 기반 고등학생 대학 학과 추천 서비스**
 
 ## 프로젝트 개요
 
@@ -8,79 +8,122 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 
 ### 기술 스택
 
-- **LLM**: Ollama + Qwen2.5:32b (한국어 성능 우수)
-- **RAG**: Qdrant (Vector DB) + Sentence-Transformers (한국어 임베딩)
+- **Frontend**: React + Vite (Nginx)
 - **API**: FastAPI
-- **LLMOps**: MLflow + Prometheus + Grafana + PostgreSQL ✨
-- **컨테이너**: Docker, Docker Compose
-- **향후 계획**: Kubernetes
+- **LangChain**: RAG 파이프라인 구성
+- **LLM**: Ollama + EXAONE-3.5-7.8B (LG AI 한국어 네이티브)
+- **Vector DB**: Qdrant
+- **Embeddings**: HuggingFace Sentence-Transformers (한국어 특화)
+- **컨테이너**: Docker Compose (4개 서비스)
+
+---
+
+## 주요 기능
+
+### 🎯 LangChain RAG 시스템
+
+- **Retrieval (검색)**: 사용자 관심사와 유사한 학과를 벡터 검색
+- **Augmentation (증강)**: 검색된 학과 정보를 컨텍스트로 제공
+- **Generation (생성)**: LLM이 맞춤형 추천 생성
+
+### ✨ 핵심 특징
+
+1. **환각 방지**: RAG로 실제 학과 정보만 추천
+2. **한국어 최적화**: 한국어 특화 임베딩 + LLM
+3. **구조화된 출력**: Pydantic Output Parser 사용
+4. **유연한 프롬프트**: LangChain PromptTemplate
+
+---
 
 ## 시작하기
 
 ### 사전 요구사항
 
-- Docker & Docker Compose 설치
-- **GPU 필수**: NVIDIA GPU (RTX 3060 12GB 이상 권장, RTX 4070 최적)
-- **NVIDIA Container Toolkit** 설치 (GPU 사용)
-  ```bash
-  # Ubuntu/Debian
-  distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-  curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-  curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
-  sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
-  sudo systemctl restart docker
-  ```
+- **Docker & Docker Compose** 설치
+- **GPU 권장**: NVIDIA GPU (8GB VRAM 이상)
+  - RTX 3060 12GB, RTX 4070, RTX 5070 등 최적
+  - NVIDIA Container Toolkit 설치 필요
 - 최소 16GB RAM (32GB 권장)
-- 디스크 공간: 최소 20GB (모델 다운로드용)
+- 디스크 공간: 최소 10GB
 
 ### 설치 및 실행
 
-1. **프로젝트 클론**
+#### 1. 프로젝트 클론
+
 ```bash
 git clone <repository-url>
 cd PathFinder
 ```
 
-2. **환경 변수 설정** (선택사항)
-```bash
-cp .env.example .env
-```
+#### 2. Docker Compose로 서비스 실행
 
-3. **Docker Compose로 서비스 실행**
 ```bash
 docker-compose up -d
 ```
 
-4. **LLM 모델 다운로드** (최초 1회)
+서비스가 시작됩니다:
+- `frontend`: React 웹 UI (포트 3000) 🌐
+- `api`: FastAPI 서버 (포트 8000)
+- `ollama`: LLM 서버 (포트 11434)
+- `qdrant`: Vector DB (포트 6333, 6334)
+
+#### 3. LLM 모델 다운로드 (최초 1회)
+
 ```bash
-curl -X POST http://localhost:8000/pull-model
+# EXAONE-3.5-7.8B 모델 다운로드 (한국어 네이티브, 12GB GPU 최적화)
+docker exec -it pathfinder-ollama ollama pull exaone3.5:7.8b
+
+# 모델 확인
+docker exec -it pathfinder-ollama ollama list
 ```
 
-5. **벡터 DB 초기화** (최초 1회, RAG 기능 사용 시)
+**VRAM 요구사항**: ~6GB (RTX 3060 12GB, RTX 4070, RTX 5070 등에 최적)
+
+#### 4. Vector DB 초기화 (최초 1회)
+
 ```bash
 curl -X POST http://localhost:8000/initialize-db
 ```
 
-6. **서비스 상태 확인**
+34개 학과 데이터가 임베딩되어 Qdrant에 저장됩니다.
+
+#### 5. 웹 브라우저에서 접속
+
+```
+http://localhost:3000
+```
+
+브라우저에서 바로 학과 추천을 받을 수 있습니다! 🎓
+
+또는 API를 직접 호출:
+
 ```bash
-# 기본 헬스 체크
 curl http://localhost:8000/health
-
-# RAG 시스템 헬스 체크
-curl http://localhost:8000/rag-health
 ```
 
-7. **LLMOps 대시보드 접속**
-```
-- Grafana: http://localhost:3000 (admin/admin)
-- Prometheus: http://localhost:9090
-- MLflow: http://localhost:5000
-- API Metrics: http://localhost:8000/metrics
-```
+---
 
-### API 사용 예시
+## 사용 방법
 
-#### 1. 기본 학과 추천 (LLM만 사용)
+### 💻 웹 UI 사용 (추천)
+
+1. 브라우저에서 `http://localhost:3000` 접속
+2. 관심사 입력 (예: "프로그래밍, AI, 수학")
+3. "학과 추천 받기" 버튼 클릭
+4. AI가 분석한 추천 학과와 상세 설명 확인
+
+### 🔧 API 직접 호출
+
+#### API 문서
+
+서비스 실행 후:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+### 주요 엔드포인트
+
+#### 1. 학과 추천 (RAG)
+
 ```bash
 curl -X POST http://localhost:8000/recommend \
   -H "Content-Type: application/json" \
@@ -89,16 +132,8 @@ curl -X POST http://localhost:8000/recommend \
   }'
 ```
 
-#### 2. RAG 기반 학과 추천 (검색 증강 생성) ⭐ 추천
-```bash
-curl -X POST http://localhost:8000/recommend-rag \
-  -H "Content-Type: application/json" \
-  -d '{
-    "interests": "프로그래밍, 게임 개발, 수학"
-  }'
-```
+**응답 예시:**
 
-#### 응답 예시
 ```json
 {
   "recommendation_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -109,7 +144,7 @@ curl -X POST http://localhost:8000/recommend-rag \
     "인공지능학과",
     "데이터사이언스학과"
   ],
-  "reasoning": "검색된 학과 정보를 바탕으로 학생의 관심사와 가장 잘 맞는 학과를 추천합니다...",
+  "reasoning": "학생의 관심사인 프로그래밍과 게임 개발에 가장 적합한 학과들입니다...",
   "retrieved_context": [
     {
       "score": 0.85,
@@ -123,190 +158,132 @@ curl -X POST http://localhost:8000/recommend-rag \
 }
 ```
 
-#### 3. 피드백 제출 (LLMOps)
+#### 2. 벡터 검색만 수행 (LLM 없음)
+
 ```bash
-curl -X POST http://localhost:8000/feedback \
+curl -X POST http://localhost:8000/search \
   -H "Content-Type: application/json" \
   -d '{
-    "recommendation_id": "550e8400-e29b-41d4-a716-446655440000",
-    "rating": 5,
-    "is_helpful": true,
-    "selected_majors": ["컴퓨터공학과", "소프트웨어학과"],
-    "comment": "매우 도움이 되었습니다!"
+    "interests": "예술, 미술, 디자인"
   }'
 ```
 
-#### 4. LLMOps 통계 조회
-```bash
-# 피드백 통계 및 시스템 정보
-curl http://localhost:8000/llmops/stats
+빠른 응답이 필요하거나 검색 결과만 확인하고 싶을 때 유용합니다.
 
-# 프롬프트 버전 목록
-curl http://localhost:8000/llmops/prompts
+#### 3. 개발자 도구
+
+```bash
+# 현재 프롬프트 템플릿 확인
+curl http://localhost:8000/debug/prompt
 ```
 
-### API 문서
-
-서비스 실행 후 다음 URL에서 자동 생성된 API 문서를 확인할 수 있습니다:
-
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+---
 
 ## 프로젝트 구조
 
 ```
 PathFinder/
 ├── src/
-│   ├── main.py            # FastAPI 애플리케이션 (LLMOps 통합)
-│   ├── rag.py             # RAG 시스템 (검색 증강 생성)
-│   ├── initialize_db.py   # Vector DB 초기화 스크립트
-│   ├── logging_config.py  # 구조화된 로깅 설정 ✨
-│   ├── metrics.py         # Prometheus 메트릭 수집 ✨
-│   ├── mlflow_tracker.py  # MLflow 실험 추적 ✨
-│   ├── prompt_manager.py  # 프롬프트 버전 관리 ✨
-│   └── feedback_db.py     # 피드백 데이터베이스 ✨
+│   ├── main.py              # FastAPI 애플리케이션 (189줄)
+│   ├── rag.py              # LangChain RAG 시스템 (258줄)
+│   └── initialize_db.py    # Vector DB 초기화 (117줄)
 ├── data/
-│   └── majors.json        # 학과 정보 데이터 (34개 학과)
-├── prompts/
-│   └── prompts.yaml       # 프롬프트 버전 관리 파일 ✨
-├── config/
-│   └── prometheus.yml     # Prometheus 설정 ✨
-├── models/                # LLM 모델 캐시 (자동 생성)
-├── Dockerfile             # API 서버 이미지
-├── docker-compose.yml     # 서비스 오케스트레이션 (7개 서비스) ✨
-├── requirements.txt       # Python 의존성
+│   └── majors.json         # 학과 정보 (34개)
+├── docker-compose.yml      # 서비스 오케스트레이션 (3개 서비스)
+├── Dockerfile              # API 서버 이미지
+├── requirements.txt        # Python 의존성
 └── README.md
 ```
 
-## 로드맵
+---
 
-### Phase 1: 기본 LLM 구동 ✅
-- [x] Docker 환경 구축
-- [x] Ollama + Llama 3.2 연동
-- [x] FastAPI 서버 구현
-- [x] 기본 학과 추천 기능
+## LangChain 아키텍처
 
-### Phase 2: RAG 구현 ✅ (현재)
-- [x] Vector DB (Qdrant) 연동
-- [x] 학과 정보 임베딩 (34개 학과, 한국어 모델)
-- [x] 검색 기반 추천 개선
-- [x] RAG 엔드포인트 구현
-- [x] 벡터 검색 + LLM 생성 파이프라인
+### RAG 파이프라인
 
-### Phase 3: LLMOps ✅ (완료)
-- [x] MLflow 실험 추적
-- [x] 프롬프트 버전 관리 (YAML 기반)
-- [x] Prometheus 메트릭 수집
-- [x] Grafana 대시보드
-- [x] 구조화된 로깅 (structlog)
-- [x] 피드백 수집 시스템 (PostgreSQL)
-- [x] LLMOps API 엔드포인트
+```
+사용자 관심사 입력
+       ↓
+[임베딩 변환] (HuggingFace Embeddings)
+       ↓
+[벡터 검색] (Qdrant VectorStore)
+       ↓
+검색된 학과 정보 (Top 5)
+       ↓
+[프롬프트 구성] (PromptTemplate)
+       ↓
+[LLM 생성] (Ollama)
+       ↓
+[출력 파싱] (PydanticOutputParser)
+       ↓
+구조화된 추천 결과
+```
 
-### Phase 4: Kubernetes (예정)
-- [ ] vLLM 전환
-- [ ] K8s 매니페스트 작성
-- [ ] HPA 오토스케일링
+### 주요 컴포넌트
 
-## RAG 시스템 소개
+#### 1. **VectorStore** (langchain_qdrant)
 
-PathFinder는 **RAG (Retrieval-Augmented Generation)** 기술을 활용하여 더 정확하고 신뢰할 수 있는 학과 추천을 제공합니다.
-
-### RAG의 장점
-
-1. **정확성 향상**: 벡터 DB에 저장된 실제 학과 정보를 기반으로 추천
-2. **환각(Hallucination) 방지**: LLM이 존재하지 않는 학과나 잘못된 정보를 생성하는 것을 방지
-3. **맥락 기반 추천**: 학생의 관심사와 유사도가 높은 학과를 우선적으로 추천
-4. **확장 가능성**: 새로운 학과 정보를 쉽게 추가하고 업데이트 가능
-
-### 작동 원리
-
-1. **임베딩**: 학과 정보를 벡터로 변환하여 Qdrant에 저장
-2. **검색**: 학생의 관심사를 벡터로 변환하고 유사한 학과 검색
-3. **생성**: 검색된 학과 정보를 컨텍스트로 LLM에 전달하여 맞춤형 추천 생성
-
-### 사용된 모델
-
-- **LLM**: Qwen2.5:32b (32B 파라미터, 한국어 성능 우수)
-  - 다국어 지원 (한국어, 영어, 중국어 등)
-  - 4bit 양자화 버전 자동 사용 (~10GB VRAM)
-  - RTX 4070 12GB에 최적화
-- **임베딩 모델**: `jhgan/ko-sroberta-multitask` (한국어 특화)
-- **Vector DB**: Qdrant
-
-## LLMOps 시스템 소개
-
-PathFinder는 **프로덕션 레벨 LLMOps**를 구현하여 AI 서비스의 품질, 성능, 신뢰성을 지속적으로 개선합니다.
-
-### 주요 기능
-
-#### 1. **실험 추적 (MLflow)**
-- 모든 추천 요청을 자동으로 추적
-- 프롬프트 버전, 모델 파라미터, 메트릭 기록
-- 실험 결과 비교 및 분석
-- 접속: http://localhost:5000
-
-#### 2. **성능 모니터링 (Prometheus + Grafana)**
-- 실시간 메트릭 수집 및 시각화
-- 응답 시간, 유사도 점수, 에러율 추적
-- 대시보드를 통한 시스템 상태 확인
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/admin)
-
-**수집되는 메트릭**:
 ```python
-- 요청 수 (endpoint, method, status별)
-- 응답 시간 (평균, p50, p95, p99)
-- RAG 검색 시간
-- LLM 생성 시간
-- 유사도 점수 분포
-- 피드백 통계 (평점, 도움 여부)
+vectorstore = QdrantVectorStore.from_existing_collection(
+    embedding=embeddings,
+    collection_name="majors",
+    url=qdrant_host
+)
 ```
 
-#### 3. **프롬프트 버전 관리**
-- YAML 기반 프롬프트 버전 관리
-- 버전별 A/B 테스팅 가능
-- 프롬프트 롤백 지원
-- 파일 위치: `prompts/prompts.yaml`
+#### 2. **Embeddings** (HuggingFace)
 
-#### 4. **피드백 수집 시스템**
-- 사용자 피드백 자동 수집 (평점, 선택 학과, 코멘트)
-- PostgreSQL에 영구 저장
-- 피드백 통계 API 제공
-- 품질 개선을 위한 데이터 축적
-
-#### 5. **구조화된 로깅 (structlog)**
-- 모든 요청에 trace_id 부여
-- 구조화된 JSON 로그
-- 검색 및 분석 용이
-- 에러 추적 및 디버깅 지원
-
-### LLMOps 활용 시나리오
-
-```
-1. 개발자가 새로운 프롬프트 버전 작성 (prompts.yaml)
-2. 시스템에 배포
-3. MLflow에서 자동으로 실험 추적
-4. Grafana 대시보드에서 성능 모니터링
-5. 사용자 피드백 수집
-6. 데이터 기반 의사결정 (어떤 프롬프트가 더 나은지)
-7. 최적의 버전 선택 및 롤아웃
+```python
+embeddings = HuggingFaceEmbeddings(
+    model_name="jhgan/ko-sroberta-multitask",  # 한국어 특화
+    encode_kwargs={'normalize_embeddings': True}
+)
 ```
 
-### Docker Services (7개)
+#### 3. **LLM** (Ollama)
 
-| 서비스 | 포트 | 역할 |
-|--------|------|------|
-| ollama | 11434 | LLM 서버 (Qwen2.5:32b) |
-| qdrant | 6333, 6334 | Vector DB |
-| postgres | 5432 | 피드백 데이터베이스 |
-| mlflow | 5000 | 실험 추적 |
-| prometheus | 9090 | 메트릭 수집 |
-| grafana | 3000 | 대시보드 |
-| api | 8000 | FastAPI 서버 |
+```python
+llm = OllamaLLM(
+    model="exaone3.5:7.8b",  # LG AI 한국어 네이티브
+    base_url=ollama_host,
+    temperature=0.7,
+    system="Korean university counselor (pure Hangul)"
+)
+```
+
+#### 4. **Output Parser** (Pydantic)
+
+```python
+class MajorRecommendation(BaseModel):
+    recommended_majors: List[str]
+    reasoning: str
+
+parser = PydanticOutputParser(pydantic_object=MajorRecommendation)
+```
+
+---
+
+## 학과 데이터
+
+**34개 학과** 포함:
+- 공학 (컴퓨터, 소프트웨어, AI, 전자, 기계 등)
+- 상경 (경영, 경제, 회계 등)
+- 의료 (의학, 간호 등)
+- 교육 (교육학 등)
+- 예술 (디자인, 음악 등)
+
+각 학과 정보:
+- 이름, 분야, 설명
+- 키워드 (10개)
+- 진로 (5개)
+- 관련 과목, 필요 역량
+
+---
 
 ## 개발
 
 ### 로컬 개발 (Docker 없이)
+
 ```bash
 # 가상환경 생성
 python -m venv venv
@@ -315,14 +292,22 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 # 의존성 설치
 pip install -r requirements.txt
 
-# Ollama 로컬 설치 필요 (https://ollama.ai)
-ollama pull qwen2.5:32b
+# Ollama 설치 및 모델 다운로드
+# https://ollama.ai에서 Ollama 설치
+ollama pull exaone3.5:7.8b
+
+# Qdrant 실행 (Docker)
+docker run -p 6333:6333 qdrant/qdrant
+
+# Vector DB 초기화
+python src/initialize_db.py
 
 # 서버 실행
 uvicorn src.main:app --reload
 ```
 
 ### 로그 확인
+
 ```bash
 # 전체 로그
 docker-compose logs -f
@@ -335,36 +320,125 @@ docker-compose logs -f ollama
 ```
 
 ### 서비스 중지
+
 ```bash
 docker-compose down
 
-# 볼륨까지 삭제 (모델 캐시 포함)
+# 볼륨까지 삭제 (모델 캐시, Vector DB 포함)
 docker-compose down -v
 ```
+
+---
+
+## LangChain의 장점
+
+### ✅ 이 프로젝트에서 활용한 기능
+
+1. **VectorStore 추상화**
+   - Qdrant, Pinecone, Chroma 등 쉽게 교체 가능
+   - 일관된 인터페이스
+
+2. **PromptTemplate**
+   - 재사용 가능한 프롬프트
+   - 변수 주입, 검증
+
+3. **Output Parser**
+   - 구조화된 출력 보장
+   - 자동 재시도 (파싱 실패 시)
+
+4. **Embeddings 통합**
+   - OpenAI, HuggingFace, Cohere 등
+   - 통일된 인터페이스
+
+5. **Document 모델**
+   - `page_content` + `metadata` 구조
+   - 검색 및 필터링 용이
+
+### 🎯 향후 확장 가능성
+
+- **ConversationChain**: 대화형 상담
+- **Agent**: 여러 도구 조합 (웹 검색, 계산기 등)
+- **Memory**: 대화 이력 관리
+- **LangSmith**: 프로덕션 모니터링
+
+---
 
 ## 트러블슈팅
 
 ### Ollama 연결 실패
-- `docker-compose logs ollama`로 Ollama 상태 확인
-- 헬스체크 대기 (최대 1-2분 소요)
+
+```bash
+# Ollama 상태 확인
+docker logs pathfinder-ollama
+
+# 헬스체크 대기 (최대 1-2분)
+```
 
 ### 메모리/VRAM 부족
+
 - Docker Desktop 메모리 할당 증가 (최소 16GB)
-- GPU 메모리 부족 시 더 작은 모델 사용:
-  - `qwen2.5:14b` (8GB VRAM)
-  - `qwen2.5:7b` (4GB VRAM)
-  - `llama3.2:3b` (2GB VRAM, 한국어 성능 낮음)
+- 더 작은 모델 사용 (`KOREAN_LLM_GUIDE.md` 참고):
+  - `yanolja/EEVE-Korean-10.8B` (8GB VRAM)
+  - `exaone3.5:7.8b` (6GB VRAM)
 
 ### 모델 다운로드 느림
-- 첫 실행 시 18-20GB 모델 다운로드로 시간 소요 (양자화 버전)
-- `/pull-model` 엔드포인트로 수동 다운로드
-- 네트워크 상태에 따라 30분~1시간 소요 가능
+
+- 첫 실행 시 18-20GB 모델 다운로드
+- 네트워크에 따라 30분~1시간 소요
 
 ### GPU 사용 확인
-- Ollama는 자동으로 GPU 감지 및 사용
-- `docker logs pathfinder-ollama`로 GPU 사용 확인
-- NVIDIA Docker Runtime 설치 필요 (GPU 사용 시)
+
+```bash
+# Ollama GPU 사용 확인
+docker logs pathfinder-ollama | grep GPU
+
+# NVIDIA Docker Runtime 필요
+nvidia-smi
+```
+
+---
+
+## 로드맵
+
+### ✅ Phase 1: LangChain RAG (완료)
+- [x] LangChain 기반 RAG 시스템
+- [x] Qdrant VectorStore 통합
+- [x] Pydantic Output Parser
+- [x] PromptTemplate 관리
+
+### 🚧 Phase 2: 기능 확장 (진행 중)
+- [ ] 대화형 상담 (ConversationChain)
+- [ ] 프롬프트 버전 관리
+- [ ] 사용자 피드백 수집
+
+### 📅 Phase 3: 프로덕션 (계획)
+- [ ] LangSmith 통합
+- [ ] 캐싱 및 성능 최적화
+- [ ] A/B 테스팅
+
+---
 
 ## 라이선스
 
 MIT License
+
+---
+
+## 기술 블로그
+
+이 프로젝트는 다음 개념을 학습하기 위한 목적으로 만들어졌습니다:
+
+- **RAG (Retrieval-Augmented Generation)**
+- **LangChain 프레임워크**
+- **Vector Databases**
+- **한국어 NLP**
+- **Docker 기반 마이크로서비스**
+
+---
+
+## 참고 자료
+
+- [LangChain 공식 문서](https://python.langchain.com/)
+- [Qdrant 공식 문서](https://qdrant.tech/)
+- [Ollama 공식 사이트](https://ollama.ai/)
+- [HuggingFace Sentence-Transformers](https://www.sbert.net/)

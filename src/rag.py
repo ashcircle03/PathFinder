@@ -1,32 +1,112 @@
 """
-RAG (Retrieval-Augmented Generation) 기반 학과 추천 시스템
+LangChain 기반 RAG (Retrieval-Augmented Generation) 학과 추천 시스템
 """
 import os
-from typing import List, Dict, Any
-from qdrant_client import QdrantClient
-from sentence_transformers import SentenceTransformer
-import ollama
+from typing import List, Dict, Any, Optional
+from langchain_qdrant import QdrantVectorStore
+from langchain_ollama import OllamaLLM
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.prompts import ChatPromptTemplate, PromptTemplate
+from langchain.chains import RetrievalQA
+from langchain.schema import Document
+from langchain.output_parsers import PydanticOutputParser
+from pydantic import BaseModel, Field
+
+
+class MajorRecommendation(BaseModel):
+    """학과 추천 결과 모델"""
+    recommended_majors: List[str] = Field(description="추천 학과 목록 (3-5개)")
+    reasoning: str = Field(description="추천 이유 및 각 학과에 대한 설명")
 
 
 class MajorRecommendationRAG:
-    """RAG 기반 학과 추천 시스템"""
+    """LangChain 기반 학과 추천 RAG 시스템"""
 
     def __init__(self):
-        # Qdrant 클라이언트 초기화
+        # 환경 변수
         qdrant_host = os.getenv("QDRANT_HOST", "http://localhost:6333")
-        self.qdrant_client = QdrantClient(url=qdrant_host)
+        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.llm_model = os.getenv("OLLAMA_MODEL", "qwen2.5:32b")
         self.collection_name = "majors"
 
-        # 임베딩 모델 로드 (한국어 지원)
-        print("임베딩 모델 로드 중...")
-        self.embedding_model = SentenceTransformer('jhgan/ko-sroberta-multitask')
+        print("🚀 LangChain RAG 시스템 초기화 중...")
 
-        # Ollama 클라이언트 초기화
-        ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        self.ollama_client = ollama.Client(host=ollama_host)
-        self.llm_model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+        # 1. 임베딩 모델 초기화 (한국어 특화)
+        print("📦 임베딩 모델 로딩...")
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="jhgan/ko-sroberta-multitask",
+            model_kwargs={'device': 'cpu'},
+            encode_kwargs={'normalize_embeddings': True}
+        )
 
-        print("RAG 시스템 초기화 완료!")
+        # 2. Qdrant Vector Store 초기화
+        print("🗄️ Qdrant Vector Store 연결...")
+        self.vectorstore = QdrantVectorStore.from_existing_collection(
+            embedding=self.embeddings,
+            collection_name=self.collection_name,
+            url=qdrant_host,
+        )
+
+        # 3. LLM 초기화 (Ollama)
+        print(f"🤖 LLM 초기화: {self.llm_model}")
+        self.llm = OllamaLLM(
+            model=self.llm_model,
+            base_url=ollama_host,
+            temperature=0.7,
+            # 한국어 응답 개선을 위한 설정
+            system="You are a Korean university counselor. Always respond in pure Korean (Hangul only). Never use Chinese characters (Hanja), Japanese, or English except for proper nouns.",
+        )
+
+        # 4. Output Parser 설정
+        self.output_parser = PydanticOutputParser(pydantic_object=MajorRecommendation)
+
+        # 5. 프롬프트 템플릿 설정
+        self._setup_prompts()
+
+        # 6. Retriever 설정
+        self.retriever = self.vectorstore.as_retriever(
+            search_type="similarity",
+            search_kwargs={"k": 5}  # 상위 5개 학과 검색
+        )
+
+        print("✅ LangChain RAG 시스템 초기화 완료!")
+
+    def _setup_prompts(self):
+        """프롬프트 템플릿 설정"""
+
+        # RAG 프롬프트 템플릿
+        self.rag_template = """당신은 한국의 대학 진학 상담 전문가입니다.
+제공된 학과 정보를 바탕으로, 학생에게 가장 적합한 학과를 추천해주세요.
+
+[검색된 학과 정보]
+{context}
+
+[학생 관심사]
+{question}
+
+위 검색된 학과 정보를 바탕으로:
+1. 학생의 관심사와 가장 잘 맞는 학과 3-5개를 추천해주세요
+2. 각 학과를 추천하는 구체적인 이유를 설명해주세요
+3. 각 학과의 특징과 진로 전망을 간략히 소개해주세요
+
+중요 규칙:
+- 반드시 검색된 학과 정보 내에서만 추천하세요
+- 존재하지 않는 학과를 만들어내지 마세요
+- 순수 한글로만 답변하세요 (한자 사용 금지)
+- 중국어나 일본어를 사용하지 마세요
+- 모든 전문 용어도 한글로 표기하세요
+
+{format_instructions}
+
+답변:"""
+
+        self.prompt = PromptTemplate(
+            template=self.rag_template,
+            input_variables=["context", "question"],
+            partial_variables={
+                "format_instructions": self.output_parser.get_format_instructions()
+            }
+        )
 
     def search_similar_majors(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -39,110 +119,89 @@ class MajorRecommendationRAG:
         Returns:
             유사한 학과 정보 리스트
         """
-        # 쿼리를 임베딩으로 변환
-        query_embedding = self.embedding_model.encode(query).tolist()
+        # LangChain retriever를 통한 검색
+        docs = self.retriever.get_relevant_documents(query)[:top_k]
 
-        # Qdrant에서 유사한 학과 검색
-        search_results = self.qdrant_client.search(
-            collection_name=self.collection_name,
-            query_vector=query_embedding,
-            limit=top_k
-        )
-
-        # 결과 포맷팅
         results = []
-        for hit in search_results:
+        for doc in docs:
             results.append({
-                "score": hit.score,
-                "major_name": hit.payload["name"],
-                "category": hit.payload["category"],
-                "description": hit.payload["description"],
-                "keywords": hit.payload["keywords"],
-                "career_paths": hit.payload["career_paths"],
-                "related_subjects": hit.payload["related_subjects"],
-                "skills_required": hit.payload["skills_required"]
+                "score": doc.metadata.get("_score", 0.0),
+                "major_name": doc.metadata.get("name", ""),
+                "category": doc.metadata.get("category", ""),
+                "description": doc.page_content,
+                "keywords": doc.metadata.get("keywords", []),
+                "career_paths": doc.metadata.get("career_paths", []),
+                "related_subjects": doc.metadata.get("related_subjects", []),
+                "skills_required": doc.metadata.get("skills_required", [])
             })
 
         return results
 
-    def generate_recommendation(self, interests: str, search_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def generate_recommendation(
+        self,
+        interests: str,
+        search_results: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
         """
         검색된 학과 정보를 바탕으로 LLM을 사용하여 추천을 생성합니다.
 
         Args:
             interests: 사용자의 관심사
-            search_results: 검색된 학과 정보 리스트
+            search_results: 검색된 학과 정보 리스트 (None이면 자동 검색)
 
         Returns:
             추천 학과와 이유를 포함한 딕셔너리
         """
-        # 검색된 학과 정보를 컨텍스트로 구성
-        context = "다음은 학생의 관심사와 관련된 학과 정보입니다:\n\n"
+        # 검색 결과가 없으면 자동 검색
+        if search_results is None:
+            search_results = self.search_similar_majors(interests)
 
+        # 컨텍스트 구성
+        context_parts = []
         for idx, result in enumerate(search_results, 1):
-            context += f"{idx}. {result['major_name']} (관련도: {result['score']:.2f})\n"
-            context += f"   분야: {result['category']}\n"
-            context += f"   설명: {result['description']}\n"
-            context += f"   관련 키워드: {', '.join(result['keywords'])}\n"
-            context += f"   진로: {', '.join(result['career_paths'][:3])}\n\n"
-
-        # LLM 프롬프트 생성
-        prompt = f"""{context}
-
-학생의 관심사: {interests}
-
-위의 학과 정보를 참고하여 학생에게 가장 적합한 학과 3-5개를 추천하고, 각 학과가 학생의 관심사와 어떻게 연결되는지 구체적으로 설명해주세요.
-
-다음 형식으로 답변해주세요:
-1. 추천 학과: [학과명1, 학과명2, 학과명3, ...]
-2. 추천 이유: [각 학과를 추천하는 구체적인 이유]
-
-중요: 반드시 한국어로 답변해주세요.
-
-추천 학과:"""
-
-        try:
-            # Ollama를 통해 LLM 호출
-            response = self.ollama_client.chat(
-                model=self.llm_model,
-                messages=[
-                    {
-                        'role': 'system',
-                        'content': '당신은 한국의 고등학생을 위한 진로 상담 전문가입니다. 학생의 관심사를 분석하여 적합한 대학 학과를 추천해주세요. 반드시 한국어로만 답변해주세요.'
-                    },
-                    {
-                        'role': 'user',
-                        'content': prompt
-                    }
-                ],
-                options={
-                    'temperature': 0.7,
-                    'num_predict': 512
-                }
+            context_parts.append(
+                f"{idx}. {result['major_name']} ({result['category']})\n"
+                f"   설명: {result['description']}\n"
+                f"   키워드: {', '.join(result['keywords'][:5])}\n"
+                f"   진로: {', '.join(result['career_paths'][:3])}"
             )
 
-            llm_response = response['message']['content']
+        context = "\n\n".join(context_parts)
 
-            # 추천 학과 추출
-            recommended_majors = [result['major_name'] for result in search_results[:5]]
+        try:
+            # LLM을 통한 추천 생성
+            prompt_text = self.prompt.format(context=context, question=interests)
+            response = self.llm.invoke(prompt_text)
 
-            return {
-                "recommended_majors": recommended_majors,
-                "reasoning": llm_response,
-                "retrieved_context": search_results
-            }
+            # Output Parser를 통한 파싱 시도
+            try:
+                parsed_response = self.output_parser.parse(response)
+                return {
+                    "recommended_majors": parsed_response.recommended_majors,
+                    "reasoning": parsed_response.reasoning,
+                    "retrieved_context": search_results
+                }
+            except Exception as parse_error:
+                # 파싱 실패 시 fallback: 검색된 학과명 사용
+                print(f"⚠️ Output 파싱 실패, fallback 사용: {parse_error}")
+                return {
+                    "recommended_majors": [r['major_name'] for r in search_results[:5]],
+                    "reasoning": response,
+                    "retrieved_context": search_results
+                }
 
         except Exception as e:
             # LLM 호출 실패 시 검색 결과만 반환
+            print(f"❌ LLM 생성 실패: {e}")
             return {
-                "recommended_majors": [result['major_name'] for result in search_results[:5]],
+                "recommended_majors": [r['major_name'] for r in search_results[:5]],
                 "reasoning": f"검색된 학과를 기반으로 추천합니다. (LLM 오류: {str(e)})",
                 "retrieved_context": search_results
             }
 
     def recommend_majors(self, interests: str, top_k: int = 5) -> Dict[str, Any]:
         """
-        사용자의 관심사를 기반으로 학과를 추천합니다.
+        사용자의 관심사를 기반으로 학과를 추천합니다. (통합 메서드)
 
         Args:
             interests: 사용자의 관심사
@@ -163,21 +222,40 @@ class MajorRecommendationRAG:
         """RAG 시스템의 상태를 확인합니다."""
         try:
             # Qdrant 연결 확인
-            collection_info = self.qdrant_client.get_collection(self.collection_name)
+            from qdrant_client import QdrantClient
+            qdrant_client = QdrantClient(url=self.vectorstore._client._host)
+            collection_info = qdrant_client.get_collection(self.collection_name)
 
-            # 임베딩 모델 확인
-            test_embedding = self.embedding_model.encode("테스트")
+            # 임베딩 모델 테스트
+            test_embedding = self.embeddings.embed_query("테스트")
+
+            # LLM 테스트
+            test_response = self.llm.invoke("안녕하세요")
 
             return {
                 "status": "healthy",
-                "qdrant_status": "connected",
+                "vectorstore": "connected",
                 "collection_name": self.collection_name,
                 "vectors_count": collection_info.points_count,
                 "embedding_model": "jhgan/ko-sroberta-multitask",
-                "embedding_dim": len(test_embedding)
+                "embedding_dim": len(test_embedding),
+                "llm_model": self.llm_model,
+                "llm_status": "ok" if test_response else "error"
             }
         except Exception as e:
             return {
                 "status": "unhealthy",
                 "error": str(e)
             }
+
+
+# 전역 RAG 시스템 인스턴스 (싱글톤)
+_rag_system = None
+
+
+def get_rag_system() -> MajorRecommendationRAG:
+    """싱글톤 RAG 시스템 가져오기"""
+    global _rag_system
+    if _rag_system is None:
+        _rag_system = MajorRecommendationRAG()
+    return _rag_system

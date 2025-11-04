@@ -1,6 +1,5 @@
-version: '3.8'
-
 services:
+  # Ollama LLM 서버
   ollama:
     image: ollama/ollama:latest
     container_name: pathfinder-ollama
@@ -22,7 +21,9 @@ services:
       retries: 3
     networks:
       - pathfinder-network
+    restart: unless-stopped
 
+  # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
     container_name: pathfinder-qdrant
@@ -35,81 +36,7 @@ services:
       - pathfinder-network
     restart: unless-stopped
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: pathfinder-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_DB=pathfinder
-      - POSTGRES_USER=pathfinder
-      - POSTGRES_PASSWORD=pathfinder_password
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - pathfinder-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pathfinder"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.15.1
-    container_name: pathfinder-mlflow
-    ports:
-      - "5000:5000"
-    environment:
-      - MLFLOW_BACKEND_STORE_URI=postgresql://pathfinder:pathfinder_password@postgres:5432/pathfinder
-      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
-    volumes:
-      - mlflow_data:/mlflow
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - pathfinder-network
-    command: >
-      mlflow server
-      --backend-store-uri postgresql://pathfinder:pathfinder_password@postgres:5432/pathfinder
-      --default-artifact-root /mlflow/artifacts
-      --host 0.0.0.0
-      --port 5000
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: pathfinder-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    networks:
-      - pathfinder-network
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: pathfinder-grafana
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel
-    volumes:
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-    networks:
-      - pathfinder-network
-    restart: unless-stopped
-
+  # FastAPI 서버
   api:
     build: .
     container_name: pathfinder-api
@@ -117,21 +44,23 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=qwen2.5:32b
+      - OLLAMA_MODEL=exaone3.5:7.8b
       - QDRANT_HOST=http://qdrant:6333
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=pathfinder
-      - POSTGRES_USER=pathfinder
-      - POSTGRES_PASSWORD=pathfinder_password
-      - MLFLOW_ENABLED=true
-      - FEEDBACK_DB_ENABLED=true
     depends_on:
       ollama:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
+    networks:
+      - pathfinder-network
+    restart: unless-stopped
+
+  # React 프론트엔드
+  frontend:
+    build: ./frontend
+    container_name: pathfinder-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
     networks:
       - pathfinder-network
     restart: unless-stopped
@@ -139,10 +68,6 @@ services:
 volumes:
   ollama_data:
   qdrant_data:
-  postgres_data:
-  mlflow_data:
-  prometheus_data:
-  grafana_data:
 
 networks:
   pathfinder-network:
