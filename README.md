@@ -14,7 +14,7 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 - **LLM**: Ollama + EXAONE-3.5-7.8B (LG AI 한국어 네이티브)
 - **Vector DB**: Qdrant
 - **Embeddings**: HuggingFace Sentence-Transformers (한국어 특화)
-- **컨테이너**: Docker Compose (4개 서비스)
+- **컨테이너**: Docker Compose + Kubernetes (Minikube)
 
 ---
 
@@ -50,18 +50,16 @@ PathFinder는 고등학생들의 관심사를 분석하여 적합한 대학 학�
 
 ---
 
-## 시작하기
+## 배포 방법
 
-### 사전 요구사항
+PathFinder는 두 가지 배포 방식을 지원합니다:
 
-- **Docker & Docker Compose** 설치
-- **GPU 권장**: NVIDIA GPU (8GB VRAM 이상)
-  - RTX 3060 12GB, RTX 4070, RTX 5070 등 최적
-  - NVIDIA Container Toolkit 설치 필요
+### 옵션 1: Docker Compose (로컬 개발용)
+
+**사전 요구사항:**
+- Docker & Docker Compose 설치
+- GPU 권장: NVIDIA GPU (8GB VRAM 이상)
 - 최소 16GB RAM (32GB 권장)
-- 디스크 공간: 최소 10GB
-
-### 설치 및 실행
 
 #### 1. 프로젝트 클론
 
@@ -115,6 +113,37 @@ http://localhost:3000
 ```bash
 curl http://localhost:8000/health
 ```
+
+### 옵션 2: Kubernetes (Minikube)
+
+**사전 요구사항:**
+- Minikube (v1.30 이상)
+- kubectl
+- Docker
+- 최소 12GB RAM 할당
+
+#### 빠른 시작
+
+```bash
+# Minikube 시작
+minikube start --driver=docker --memory=12288 --cpus=4
+
+# Docker 환경 설정
+eval $(minikube docker-env)
+
+# 이미지 빌드
+docker build -t pathfinder-api:latest .
+docker build -t pathfinder-frontend:latest ./frontend
+
+# 배포
+cd k8s
+./deploy.sh
+
+# Frontend 접속
+minikube service frontend-service -n pathfinder
+```
+
+**상세 가이드**: [k8s/README.md](k8s/README.md)
 
 ---
 
@@ -265,6 +294,31 @@ PathFinder/
 ├── data/
 │   ├── majors.json            # 기본 학과 정보 (34개)
 │   └── university_departments.json  # 대학 학과 정보 (50개) NEW!
+├── frontend/
+│   ├── src/
+│   │   ├── components/        # React 컴포넌트 NEW!
+│   │   │   ├── ChatInterface.jsx       # 대화형 상담 UI
+│   │   │   └── RecommendationDetail.jsx # 추천 결과 상세
+│   │   ├── App.jsx
+│   │   └── App.css
+│   ├── nginx.conf             # Nginx 프록시 설정
+│   └── Dockerfile
+├── k8s/                       # Kubernetes 매니페스트 NEW!
+│   ├── 00-namespace.yaml      # 네임스페이스
+│   ├── 01-configmap.yaml      # 환경 설정
+│   ├── 02-pvc-ollama.yaml     # Ollama 영구 볼륨
+│   ├── 03-pvc-qdrant.yaml     # Qdrant 영구 볼륨
+│   ├── 04-deployment-ollama.yaml
+│   ├── 05-service-ollama.yaml
+│   ├── 06-deployment-qdrant.yaml
+│   ├── 07-service-qdrant.yaml
+│   ├── 08-deployment-api.yaml
+│   ├── 09-service-api.yaml
+│   ├── 10-deployment-frontend.yaml
+│   ├── 11-service-frontend.yaml
+│   ├── deploy.sh              # 자동 배포 스크립트
+│   ├── cleanup.sh             # 정리 스크립트
+│   └── README.md              # Kubernetes 배포 가이드
 ├── docker-compose.yml         # 서비스 오케스트레이션 (4개 서비스)
 ├── Dockerfile                 # API 서버 이미지
 ├── requirements.txt           # Python 의존성
@@ -515,10 +569,13 @@ nvidia-smi
 - [x] 실제 대학 학과 데이터 통합 (50개)
 - [x] 세션 기반 대화 관리
 
-### 🚧 Phase 3: UX 개선 (진행 중)
-- [ ] Frontend 채팅 UI 구현
-- [ ] 대화 히스토리 시각화
-- [ ] 추천 결과 상세 페이지
+### ✅ Phase 3: UX 및 인프라 개선 (완료)
+- [x] Frontend 채팅 UI 구현 (ChatInterface)
+- [x] 대화 히스토리 시각화
+- [x] 추천 결과 상세 페이지 (RecommendationDetail)
+- [x] Kubernetes 배포 환경 구축 (Minikube)
+- [x] FastAPI lifespan 패턴 적용
+- [x] 반응형 디자인 적용
 
 ### 📅 Phase 4: 프로덕션 (계획)
 - [ ] LangSmith 통합
