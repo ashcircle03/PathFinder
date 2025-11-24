@@ -156,18 +156,26 @@ class CareerCounselorConversation:
         try:
             response = self.conversation_chain.predict(input=user_message)
 
-            # 구조화된 프로필 추출 (Pydantic 기반)
-            profile = self._extract_profile_structured()
+            # 초기 대화(1-2회)는 프로필 추출 생략 (성능 최적화)
+            if self.collected_info["conversation_count"] >= 2:
+                # 구조화된 프로필 추출 (Pydantic 기반)
+                profile = self._extract_profile_structured()
 
-            # 충분한 정보가 수집되었는지 판단 (LLM 기반 confidence score)
-            is_ready = self._check_readiness_with_llm(profile)
+                # 충분한 정보가 수집되었는지 판단 (LLM 기반 confidence score)
+                is_ready = self._check_readiness_with_llm(profile)
+                confidence_score = profile.confidence_score
+            else:
+                # 초기 대화: 프로필 추출 생략
+                is_ready = False
+                confidence_score = 0.0
+                print(f"[INFO] 초기 대화 ({self.collected_info['conversation_count']}회) - 프로필 추출 생략")
 
             return {
                 "response": response,
                 "is_ready_to_recommend": is_ready,
                 "collected_info": self.collected_info,
                 "conversation_count": self.collected_info["conversation_count"],
-                "confidence_score": profile.confidence_score
+                "confidence_score": confidence_score
             }
 
         except Exception as e:
