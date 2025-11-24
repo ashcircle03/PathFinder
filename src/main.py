@@ -11,7 +11,13 @@ from contextlib import asynccontextmanager
 # LangSmith 추적 활성화
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "pathfinder-production"
-# os.environ["LANGCHAIN_API_KEY"] = "your-api-key-here"  # 실제 키로 교체 필요
+# 환경변수에서 API 키 가져오기 (없으면 비활성화)
+langsmith_api_key = os.getenv("LANGCHAIN_API_KEY", "")
+if langsmith_api_key:
+    os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
+    print(f"✅ LangSmith API Key 로드됨 (길이: {len(langsmith_api_key)})")
+else:
+    print("⚠️ LangSmith API Key가 설정되지 않았습니다. 추적 기능이 비활성화됩니다.")  
 
 # RAG 시스템 (지연 로딩)
 rag_system = None

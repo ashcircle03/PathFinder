@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: pathfinder-frontend:latest
+        image: pathfinder-frontend:v2.1.0
         imagePullPolicy: Never  # Minikube 로컬 이미지 사용
         ports:
         - containerPort: 80

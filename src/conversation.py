@@ -99,32 +99,33 @@ class CareerCounselorConversation:
 
     def _setup_prompts(self):
         """프롬프트 템플릿 설정"""
-        self.system_message = """당신은 20년 경력의 진로 상담 전문가입니다.
+        self.system_message = """당신은 20년 경력의 진로 상담 전문가입니다. 고등학생들은 대부분 자신이 무엇을 원하는지, 무엇을 잘하는지 모릅니다.
 
-고등학생과 대화하며 다음 정보를 자연스럽게 수집하세요:
-1. 관심사 (좋아하는 활동, 취미, 흥미있는 분야)
-2. 잘하는 과목 (수학, 과학, 국어, 영어, 사회 등)
-3. 성격 및 강점 (리더십, 창의력, 분석력 등)
-4. 진로 목표 (하고 싶은 일, 되고 싶은 직업)
+**목표: 다음 4가지 정보를 구체적으로 수집**
+1. 관심사 (좋아하는 활동, 취미, 흥미있는 분야) - "게임", "유튜브"처럼 막연한 답변은 불충분
+2. 학업 성향 (잘하는/좋아하는 과목, 또는 싫어하는 과목) - "다 별로"는 불충분
+3. 성격/강점 (친구들이 말하는 나의 특징, 내가 잘하는 것) - 추상적 질문 필요
+4. 진로 희망 (구체적 직업, 또는 일하고 싶은 방식) - "돈 많이 벌기"는 불충분
 
-대화 스타일:
-- 친근하고 격려하는 톤으로 대화하세요
-- 한 번에 한 가지 질문만 하세요
-- 학생의 답변에 공감하고 긍정적으로 반응하세요
-- 학생이 짧게 답하거나 부정적이면, 질문 방식을 바꿔 다른 각도로 접근하세요
-- 학생이 "없어", "모르겠어", "다른 건 없어" 등으로 답하면 구체적인 예시를 들어가며 새로운 주제로 전환하세요
-- 같은 질문을 반복하지 마세요
-- 3-5회 대화 후 4가지 카테고리 중 최소 3개 정보가 모이면 "학과 추천을 시작하겠습니다"라고 말하세요
+**대화 전략 (고등학생 특성 고려)**
+- 대부분의 학생은 막연하고 추상적으로 답합니다 ("모르겠어요", "그냥요", "돈 많이 벌고 싶어요")
+- 막연한 답변에는 구체적 선택지를 제시하세요
+  예: "게임 좋아해요" → "어떤 게임이에요? 전략 게임? 롤플레잉? 퍼즐?"
+  예: "유튜브 봐요" → "어떤 채널 자주 봐요? 게임? 과학? 브이로그?"
+- "모르겠어요"라고 하면 경험 기반 질문으로 전환
+  예: "그럼 최근 한 달 동안 제일 재밌었던 순간이 언제였어요?"
+- 부정적 답변("다 별로", "없어요")에는 반대로 접근
+  예: "그럼 제일 덜 싫은 과목은요?", "안 해봤지만 해보고 싶은 건요?"
+- 추상적 목표("돈 많이 벌기")는 구체화 유도
+  예: "돈 많이 벌면서 어떤 일을 하고 싶어요? 회사? 창업? 프리랜서?"
 
-감정 감지 및 대응:
-- 학생이 짜증내거나 피곤해하면: 대화 속도를 조절하고 부담을 줄이세요
-- 학생이 소극적이면: 선택형 질문이나 구체적 예시를 제공하세요
-- 학생이 적극적이면: 더 깊이있는 질문으로 확장하세요
-
-중요한 규칙:
-- 반드시 순수 한국어로만 답변하세요 (한자, 영어, 일본어 사용 금지)
-- 학생을 존중하고 격려하는 태도를 유지하세요
-- 짧고 간결하게 답변하세요 (2-3문장)
+**필수 규칙**
+- 한 번에 한 가지만 물어보세요
+- 같은 질문 반복 금지
+- 2-3문장으로 짧게
+- 순수 한글만 사용 (한자, 영어 금지)
+- 7-10회 대화 후에도 구체적 정보가 3개 미만이면 계속 질문
+- 학생이 피곤해하면 "조금만 더 이야기해주면 맞춤 추천 드릴 수 있어요" 격려
 
 {chat_history}
 
@@ -251,32 +252,55 @@ class CareerCounselorConversation:
 
     def _check_readiness_with_llm(self, profile: StudentProfile) -> bool:
         """LLM confidence score를 기반으로 추천 준비 여부 판단"""
-        # 1. 최소 대화 횟수 확인
-        if self.collected_info["conversation_count"] < 3:
+        # 1. 최소 대화 횟수 확인 (너무 빠른 추천 방지)
+        if self.collected_info["conversation_count"] < 5:
             return False
 
-        # 2. 정보 완성도 체크 (4가지 카테고리 중 최소 3개 필요)
+        # 2. 정보 완성도 체크 (4가지 카테고리)
         categories_filled = 0
+        categories_detail = []
+
         if len(profile.interests) > 0:
             categories_filled += 1
+            categories_detail.append(f"관심사({len(profile.interests)}개)")
         if len(profile.favorite_subjects) > 0:
             categories_filled += 1
+            categories_detail.append(f"과목({len(profile.favorite_subjects)}개)")
         if len(profile.strengths) > 0:
             categories_filled += 1
+            categories_detail.append(f"강점({len(profile.strengths)}개)")
         if len(profile.career_goals) > 0:
             categories_filled += 1
+            categories_detail.append(f"진로({len(profile.career_goals)}개)")
 
-        # 3. LLM이 판단한 confidence score 확인 (0.7 이상 + 3개 카테고리 필수)
-        if profile.confidence_score >= 0.7 and categories_filled >= 3:
-            print(f"[INFO] 충분한 정보 수집됨 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4)")
+        # 3. 구체성 검증: 막연한 답변 필터링
+        # "게임", "유튜브", "돈", "모르겠다" 같은 단어만 있으면 구체성 부족
+        vague_keywords = ["게임", "유튜브", "돈", "모르", "그냥", "별로", "없"]
+        all_info = profile.interests + profile.favorite_subjects + profile.strengths + profile.career_goals
+        vague_count = sum(1 for item in all_info if any(vague in item for vague in vague_keywords))
+
+        is_too_vague = (vague_count >= len(all_info) // 2) if len(all_info) > 0 else True
+
+        # 4. 엄격한 기준: confidence 0.75 이상 + 3개 카테고리 + 구체성
+        if profile.confidence_score >= 0.75 and categories_filled >= 3 and not is_too_vague:
+            print(f"[INFO] ✅ 충분한 정보 수집 (confidence: {profile.confidence_score:.2f}, {'/'.join(categories_detail)})")
             return True
 
-        # 4. 대화가 7회 이상이고 최소 2개 카테고리 정보 있으면 추천
-        if self.collected_info["conversation_count"] >= 7 and categories_filled >= 2:
-            print(f"[INFO] 대화 7회 이상, 최소 정보 확보 → 추천 진행 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4)")
+        # 5. 대화가 10회 이상이고 최소 3개 카테고리 (강제 추천)
+        if self.collected_info["conversation_count"] >= 10 and categories_filled >= 3:
+            print(f"[INFO] ⏰ 대화 10회 도달, 현재 정보로 추천 (confidence: {profile.confidence_score:.2f}, {'/'.join(categories_detail)})")
             return True
 
-        print(f"[INFO] 더 많은 정보 필요 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4, count: {self.collected_info['conversation_count']})")
+        # 6. 정보 부족
+        reason = []
+        if categories_filled < 3:
+            reason.append(f"카테고리 부족({categories_filled}/4)")
+        if is_too_vague:
+            reason.append("막연한 답변 다수")
+        if profile.confidence_score < 0.75:
+            reason.append(f"낮은 confidence({profile.confidence_score:.2f})")
+
+        print(f"[INFO] ❌ 더 많은 정보 필요: {', '.join(reason)} | {'/'.join(categories_detail) if categories_detail else '정보 없음'} | {self.collected_info['conversation_count']}회 대화")
         return False
 
     def get_collected_interests(self) -> str:

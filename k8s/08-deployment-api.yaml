@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: pathfinder-api:latest
+        image: pathfinder-api:v2.1.0
         imagePullPolicy: Never  # Minikube 로컬 이미지 사용
         ports:
         - containerPort: 8000
@@ -41,6 +41,11 @@ spec:
             configMapKeyRef:
               name: pathfinder-config
               key: QDRANT_HOST
+        - name: LANGCHAIN_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: langsmith-secret
+              key: LANGCHAIN_API_KEY
         resources:
           requests:
             memory: "1Gi"
