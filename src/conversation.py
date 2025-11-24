@@ -111,7 +111,15 @@ class CareerCounselorConversation:
 - 친근하고 격려하는 톤으로 대화하세요
 - 한 번에 한 가지 질문만 하세요
 - 학생의 답변에 공감하고 긍정적으로 반응하세요
-- 3-5회 대화 후 충분한 정보가 모이면 "학과 추천을 시작하겠습니다"라고 말하세요
+- 학생이 짧게 답하거나 부정적이면, 질문 방식을 바꿔 다른 각도로 접근하세요
+- 학생이 "없어", "모르겠어", "다른 건 없어" 등으로 답하면 구체적인 예시를 들어가며 새로운 주제로 전환하세요
+- 같은 질문을 반복하지 마세요
+- 3-5회 대화 후 4가지 카테고리 중 최소 3개 정보가 모이면 "학과 추천을 시작하겠습니다"라고 말하세요
+
+감정 감지 및 대응:
+- 학생이 짜증내거나 피곤해하면: 대화 속도를 조절하고 부담을 줄이세요
+- 학생이 소극적이면: 선택형 질문이나 구체적 예시를 제공하세요
+- 학생이 적극적이면: 더 깊이있는 질문으로 확장하세요
 
 중요한 규칙:
 - 반드시 순수 한국어로만 답변하세요 (한자, 영어, 일본어 사용 금지)
@@ -211,11 +219,13 @@ class CareerCounselorConversation:
 
 추출할 수 있는 정보만 포함하고, 없는 정보는 빈 리스트로 두세요.
 또한 충분한 정보가 수집되었는지 판단하여 confidence_score를 설정하세요 (0.0~1.0).
-- 0.7 이상: 학과 추천 가능
+- 0.7 이상: 학과 추천 가능 (4가지 카테고리 중 3개 이상 정보 있음)
 - 0.5~0.7: 조금 더 정보 필요
 - 0.5 미만: 많은 정보 필요
 
 {self.profile_parser.get_format_instructions()}
+
+**중요: 반드시 순수 JSON만 출력하세요. 주석, 설명, 코드 블록 마커(```json, ```)는 절대 포함하지 마세요.**
 
 추출된 프로필:"""
 
@@ -245,24 +255,28 @@ class CareerCounselorConversation:
         if self.collected_info["conversation_count"] < 3:
             return False
 
-        # 2. LLM이 판단한 confidence score 확인
-        if profile.confidence_score >= 0.7:
-            print(f"[INFO] 충분한 정보 수집됨 (confidence: {profile.confidence_score:.2f})")
+        # 2. 정보 완성도 체크 (4가지 카테고리 중 최소 3개 필요)
+        categories_filled = 0
+        if len(profile.interests) > 0:
+            categories_filled += 1
+        if len(profile.favorite_subjects) > 0:
+            categories_filled += 1
+        if len(profile.strengths) > 0:
+            categories_filled += 1
+        if len(profile.career_goals) > 0:
+            categories_filled += 1
+
+        # 3. LLM이 판단한 confidence score 확인 (0.7 이상 + 3개 카테고리 필수)
+        if profile.confidence_score >= 0.7 and categories_filled >= 3:
+            print(f"[INFO] 충분한 정보 수집됨 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4)")
             return True
 
-        # 3. 대화가 5회 이상이고 일부 정보라도 있으면 강제 추천
-        if self.collected_info["conversation_count"] >= 5:
-            has_any_info = (
-                len(profile.interests) > 0 or
-                len(profile.favorite_subjects) > 0 or
-                len(profile.strengths) > 0 or
-                len(profile.career_goals) > 0
-            )
-            if has_any_info:
-                print(f"[INFO] 대화 5회 이상, 정보 있음 → 추천 진행 (confidence: {profile.confidence_score:.2f})")
-                return True
+        # 4. 대화가 7회 이상이고 최소 2개 카테고리 정보 있으면 추천
+        if self.collected_info["conversation_count"] >= 7 and categories_filled >= 2:
+            print(f"[INFO] 대화 7회 이상, 최소 정보 확보 → 추천 진행 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4)")
+            return True
 
-        print(f"[INFO] 더 많은 정보 필요 (confidence: {profile.confidence_score:.2f}, count: {self.collected_info['conversation_count']})")
+        print(f"[INFO] 더 많은 정보 필요 (confidence: {profile.confidence_score:.2f}, categories: {categories_filled}/4, count: {self.collected_info['conversation_count']})")
         return False
 
     def get_collected_interests(self) -> str:
