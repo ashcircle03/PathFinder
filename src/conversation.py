@@ -6,9 +6,36 @@ from typing import Dict, Any, List, Optional
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate, ChatPromptTemplate, MessagesPlaceholder
 from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory, ConversationSummaryMemory
+from langchain.memory import ConversationBufferMemory, ConversationSummaryMemory, ConversationSummaryBufferMemory
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
+from langchain.output_parsers import PydanticOutputParser
+
+
+class StudentProfile(BaseModel):
+    """학생 프로필 구조화 모델"""
+    interests: List[str] = Field(
+        description="학생의 관심사 및 활동 (예: 프로그래밍, 게임, 독서)",
+        default_factory=list
+    )
+    favorite_subjects: List[str] = Field(
+        description="좋아하는 과목 (예: 수학, 과학, 영어)",
+        default_factory=list
+    )
+    strengths: List[str] = Field(
+        description="강점 및 성격 특성 (예: 리더십, 창의력, 분석력)",
+        default_factory=list
+    )
+    career_goals: List[str] = Field(
+        description="진로 목표 및 하고 싶은 일",
+        default_factory=list
+    )
+    confidence_score: float = Field(
+        description="정보 충분도 (0.0 ~ 1.0, 0.7 이상이면 추천 가능)",
+        default=0.0,
+        ge=0.0,
+        le=1.0
+    )
 
 
 class ConversationResponse(BaseModel):
@@ -39,13 +66,16 @@ class CareerCounselorConversation:
             system="You are a friendly Korean university counselor. Always respond in pure Korean (Hangul only)."
         )
 
-        # Memory 설정 (대화 이력 저장)
-        self.memory = ConversationBufferMemory(
+        # Memory 설정 (대화 이력 저장 + 자동 요약)
+        self.memory = ConversationSummaryBufferMemory(
+            llm=self.llm,
             memory_key="chat_history",
             return_messages=True,
             input_key="input",
-            output_key="response"
+            output_key="response",
+            max_token_limit=500  # 최근 500토큰 유지, 나머지는 요약
         )
+        print(f"  ✅ ConversationSummaryBufferMemory 설정 (max_tokens: 500)")
 
         # 프롬프트 템플릿 설정
         self._setup_prompts()
@@ -61,6 +91,9 @@ class CareerCounselorConversation:
             "goals": [],
             "conversation_count": 0
         }
+
+        # Pydantic Parser 설정
+        self.profile_parser = PydanticOutputParser(pydantic_object=StudentProfile)
 
         print(f"[OK] 대화형 상담 시스템 초기화 완료 (세션: {session_id})")
 
@@ -123,17 +156,18 @@ class CareerCounselorConversation:
         try:
             response = self.conversation_chain.predict(input=user_message)
 
-            # 관심사 키워드 추출 (간단한 휴리스틱)
-            self._extract_keywords(user_message, response)
+            # 구조화된 프로필 추출 (Pydantic 기반)
+            profile = self._extract_profile_structured()
 
-            # 충분한 정보가 수집되었는지 판단
-            is_ready = self._check_if_ready_to_recommend(response)
+            # 충분한 정보가 수집되었는지 판단 (LLM 기반 confidence score)
+            is_ready = self._check_readiness_with_llm(profile)
 
             return {
                 "response": response,
                 "is_ready_to_recommend": is_ready,
                 "collected_info": self.collected_info,
-                "conversation_count": self.collected_info["conversation_count"]
+                "conversation_count": self.collected_info["conversation_count"],
+                "confidence_score": profile.confidence_score
             }
 
         except Exception as e:
@@ -144,47 +178,83 @@ class CareerCounselorConversation:
                 "error": str(e)
             }
 
-    def _extract_keywords(self, user_message: str, ai_response: str):
-        """사용자 메시지와 AI 응답에서 키워드 추출"""
-        # 관심사 관련 키워드
-        interest_keywords = ["좋아", "관심", "흥미", "재미", "취미", "즐기"]
-        # 과목 관련 키워드
-        subject_keywords = ["수학", "과학", "영어", "국어", "사회", "역사", "물리", "화학", "생물"]
-        # 성격 관련 키워드
-        personality_keywords = ["성격", "리더", "창의", "분석", "꼼꼼", "외향", "내향"]
+    def _extract_profile_structured(self) -> StudentProfile:
+        """LLM을 사용하여 대화에서 구조화된 프로필 추출"""
+        try:
+            # 대화 이력 가져오기
+            memory_variables = self.memory.load_memory_variables({})
+            chat_history = str(memory_variables.get("chat_history", ""))
 
-        message_lower = user_message.lower()
+            if not chat_history or chat_history == "[]":
+                # 대화가 없으면 빈 프로필 반환
+                return StudentProfile()
 
-        # 간단한 키워드 매칭 (실제로는 NLP 라이브러리 사용 권장)
-        if any(keyword in message_lower for keyword in interest_keywords):
-            words = user_message.split()
-            self.collected_info["interests"].extend([w for w in words if len(w) > 1])
+            # 프로필 추출 프롬프트
+            extraction_prompt = f"""다음 대화 내용을 분석하여 학생의 프로필을 추출하세요.
 
-        for subject in subject_keywords:
-            if subject in message_lower:
-                if subject not in self.collected_info["subjects"]:
-                    self.collected_info["subjects"].append(subject)
+대화 내용:
+{chat_history}
 
-    def _check_if_ready_to_recommend(self, response: str) -> bool:
-        """학과 추천을 할 준비가 되었는지 판단"""
-        # 1. 대화 횟수가 3회 이상인지
+위 대화에서 다음 정보를 추출하세요:
+1. 관심사 (좋아하는 활동, 취미)
+2. 좋아하는 과목
+3. 강점 및 성격 특성
+4. 진로 목표
+
+추출할 수 있는 정보만 포함하고, 없는 정보는 빈 리스트로 두세요.
+또한 충분한 정보가 수집되었는지 판단하여 confidence_score를 설정하세요 (0.0~1.0).
+- 0.7 이상: 학과 추천 가능
+- 0.5~0.7: 조금 더 정보 필요
+- 0.5 미만: 많은 정보 필요
+
+{self.profile_parser.get_format_instructions()}
+
+추출된 프로필:"""
+
+            response = self.llm.invoke(extraction_prompt)
+            profile = self.profile_parser.parse(response)
+
+            # collected_info 업데이트
+            self.collected_info["interests"] = profile.interests
+            self.collected_info["subjects"] = profile.favorite_subjects
+            self.collected_info["personality"] = profile.strengths
+            self.collected_info["goals"] = profile.career_goals
+
+            return profile
+
+        except Exception as e:
+            print(f"[WARN] 프로필 추출 실패, fallback 사용: {e}")
+            # 실패 시 낮은 confidence score 반환
+            return StudentProfile(
+                interests=self.collected_info.get("interests", []),
+                favorite_subjects=self.collected_info.get("subjects", []),
+                confidence_score=0.3
+            )
+
+    def _check_readiness_with_llm(self, profile: StudentProfile) -> bool:
+        """LLM confidence score를 기반으로 추천 준비 여부 판단"""
+        # 1. 최소 대화 횟수 확인
         if self.collected_info["conversation_count"] < 3:
             return False
 
-        # 2. 응답에 "추천" 키워드가 있는지
-        recommend_keywords = ["추천", "학과를 알려", "소개", "제안"]
-        if any(keyword in response for keyword in recommend_keywords):
+        # 2. LLM이 판단한 confidence score 확인
+        if profile.confidence_score >= 0.7:
+            print(f"[INFO] 충분한 정보 수집됨 (confidence: {profile.confidence_score:.2f})")
             return True
 
-        # 3. 충분한 정보가 수집되었는지
-        has_enough_info = (
-            len(self.collected_info["interests"]) > 0 or
-            len(self.collected_info["subjects"]) > 0
-        )
+        # 3. 대화가 5회 이상이고 일부 정보라도 있으면 강제 추천
+        if self.collected_info["conversation_count"] >= 5:
+            has_any_info = (
+                len(profile.interests) > 0 or
+                len(profile.favorite_subjects) > 0 or
+                len(profile.strengths) > 0 or
+                len(profile.career_goals) > 0
+            )
+            if has_any_info:
+                print(f"[INFO] 대화 5회 이상, 정보 있음 → 추천 진행 (confidence: {profile.confidence_score:.2f})")
+                return True
 
-        if self.collected_info["conversation_count"] >= 5 and has_enough_info:
-            return True
-
+        print(f"[INFO] 더 많은 정보 필요 (confidence: {profile.confidence_score:.2f}, count: {self.collected_info['conversation_count']})")
         return False
 
     def get_collected_interests(self) -> str:

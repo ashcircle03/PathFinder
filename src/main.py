@@ -1,11 +1,17 @@
 """
 PathFinder API - LangChain 기반 학과 추천 서비스
 """
+import os
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 import uuid
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
+
+# LangSmith 추적 활성화
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "pathfinder-production"
+# os.environ["LANGCHAIN_API_KEY"] = "your-api-key-here"  # 실제 키로 교체 필요
 
 # RAG 시스템 (지연 로딩)
 rag_system = None
@@ -19,6 +25,7 @@ async def lifespan(app: FastAPI):
     global rag_system, rag_initialized
     try:
         print("🚀 서버 시작 중... RAG 시스템 초기화")
+        print("📊 LangSmith 추적 활성화됨 (프로젝트: pathfinder-production)")
         from src.rag import get_rag_system as _get_rag
         rag_system = _get_rag()
         rag_initialized = True
@@ -155,30 +162,6 @@ async def recommend_major(request: InterestRequest):
         raise HTTPException(
             status_code=500,
             detail=f"추천 생성 실패: {str(e)}"
-        )
-
-
-@app.post("/search")
-async def search_majors(request: InterestRequest):
-    """
-    벡터 검색만 수행 (LLM 생성 없음)
-
-    - 빠른 응답이 필요한 경우
-    - 검색 결과만 확인하고 싶은 경우
-    """
-    try:
-        rag = get_rag_system()
-        search_results = rag.search_similar_majors(request.interests, top_k=5)
-
-        return {
-            "query": request.interests,
-            "results": search_results
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"검색 실패: {str(e)}"
         )
 
 
