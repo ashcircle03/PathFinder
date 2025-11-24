@@ -258,27 +258,28 @@ class CareerCounselorConversation:
         return False
 
     def get_collected_interests(self) -> str:
-        """수집된 관심사를 문자열로 반환 (RAG 검색용)"""
+        """수집된 관심사를 문자열로 반환 (RAG 검색용) - 구조화된 프로필 활용"""
+        # Pydantic 구조화 추출 활용 (노이즈 자동 제거)
+        profile = self._extract_profile_structured()
+
         interests_list = []
 
-        if self.collected_info["interests"]:
-            interests_list.extend(self.collected_info["interests"][:5])
+        # 1. 구조화된 관심사 (LLM이 의미 있는 키워드만 추출)
+        interests_list.extend(profile.interests[:5])  # 최대 5개
 
-        if self.collected_info["subjects"]:
-            interests_list.extend(self.collected_info["subjects"])
+        # 2. 좋아하는 과목
+        interests_list.extend(profile.favorite_subjects)
 
-        # 대화 히스토리에서 추가 추출
-        chat_history = self.memory.load_memory_variables({})
-        if chat_history and "chat_history" in chat_history:
-            # 간단하게 마지막 몇 개 메시지만 추출
-            messages = chat_history["chat_history"]
-            for msg in messages[-3:]:
-                if isinstance(msg, HumanMessage):
-                    words = msg.content.split()
-                    interests_list.extend([w for w in words if len(w) > 2])
+        # 3. 강점 및 성격 (선택적, 최대 3개)
+        interests_list.extend(profile.strengths[:3])
 
-        # 중복 제거 및 문자열 변환
-        unique_interests = list(set(interests_list))
+        # 4. 진로 목표
+        interests_list.extend(profile.career_goals[:2])  # 최대 2개
+
+        # 중복 제거 (순서 유지)
+        unique_interests = list(dict.fromkeys(interests_list))
+
+        print(f"[INFO] 추출된 관심사: {unique_interests[:10]}")
         return ", ".join(unique_interests[:10])
 
     def reset_session(self):
