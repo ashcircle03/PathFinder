@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: pathfinder
+  labels:
+    app: pathfinder
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pathfinder
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: pathfinder
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: pathfinder-frontend:latest
+        imagePullPolicy: Never  # Minikube 로컬 이미지 사용
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

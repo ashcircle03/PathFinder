@@ -65,3 +65,4 @@ models/
 .pytest_cache/
 .coverage
 htmlcov/
+test_chat*.json

@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import axios from 'axios'
+import ChatInterface from './components/ChatInterface'
+import RecommendationDetail from './components/RecommendationDetail'
 import './App.css'
 
 function App() {
+  const [mode, setMode] = useState('select') // 'select', 'quick', 'chat', 'detail'
   const [interests, setInterests] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -28,12 +31,96 @@ function App() {
     }
   }
 
+  const handleViewDetail = () => {
+    setMode('detail')
+  }
+
+  const handleBackFromDetail = () => {
+    setResult(null)
+    setInterests('')
+    setMode('quick')
+  }
+
+  const handleBackToSelect = () => {
+    setMode('select')
+    setResult(null)
+    setInterests('')
+  }
+
+  // 모드 선택 화면
+  if (mode === 'select') {
+    return (
+      <div className="container">
+        <div className="card">
+          <div className="header">
+            <h1>🎓 PathFinder</h1>
+            <p className="subtitle">AI 기반 대학 학과 추천 서비스</p>
+          </div>
+
+          <div className="mode-selection">
+            <h2>추천 방식을 선택해주세요</h2>
+            <div className="mode-cards">
+              <div className="mode-card" onClick={() => setMode('quick')}>
+                <div className="mode-icon">⚡</div>
+                <h3>빠른 추천</h3>
+                <p>관심사를 입력하면 즉시 학과를 추천받습니다</p>
+                <span className="mode-time">1-2분 소요</span>
+              </div>
+
+              <div className="mode-card" onClick={() => setMode('chat')}>
+                <div className="mode-icon">💬</div>
+                <h3>대화형 상담</h3>
+                <p>AI 상담사와 대화하며 맞춤형 추천을 받습니다</p>
+                <span className="mode-time">3-5분 소요</span>
+              </div>
+            </div>
+          </div>
+
+          <footer>
+            <p>Powered by LangChain, EXAONE-3.5, Qdrant</p>
+          </footer>
+        </div>
+      </div>
+    )
+  }
+
+  // 대화형 상담 화면
+  if (mode === 'chat') {
+    return (
+      <div className="container">
+        <button onClick={handleBackToSelect} className="back-to-select">
+          ← 돌아가기
+        </button>
+        <ChatInterface />
+        <footer>
+          <p>Powered by LangChain, EXAONE-3.5, Qdrant</p>
+        </footer>
+      </div>
+    )
+  }
+
+  // 상세 결과 화면
+  if (mode === 'detail') {
+    return (
+      <div className="container">
+        <RecommendationDetail result={result} onBack={handleBackFromDetail} />
+        <footer>
+          <p>Powered by LangChain, EXAONE-3.5, Qdrant</p>
+        </footer>
+      </div>
+    )
+  }
+
+  // 빠른 추천 화면 (기존)
   return (
     <div className="container">
+      <button onClick={handleBackToSelect} className="back-to-select">
+        ← 돌아가기
+      </button>
       <div className="card">
         <div className="header">
           <h1>🎓 PathFinder</h1>
-          <p className="subtitle">AI 기반 대학 학과 추천 서비스</p>
+          <p className="subtitle">빠른 학과 추천</p>
         </div>
 
         <form onSubmit={handleSubmit} className="form">
@@ -102,15 +189,20 @@ function App() {
               </details>
             )}
 
-            <button
-              onClick={() => {
-                setResult(null)
-                setInterests('')
-              }}
-              className="reset-button"
-            >
-              다시 추천받기
-            </button>
+            <div className="result-actions">
+              <button onClick={handleViewDetail} className="detail-button">
+                상세 결과 보기
+              </button>
+              <button
+                onClick={() => {
+                  setResult(null)
+                  setInterests('')
+                }}
+                className="reset-button"
+              >
+                다시 추천받기
+              </button>
+            </div>
           </div>
         )}
       </div>

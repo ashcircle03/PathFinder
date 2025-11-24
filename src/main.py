@@ -5,29 +5,50 @@ from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
 import uuid
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
+
+# RAG 시스템 (지연 로딩)
+rag_system = None
+rag_initialized = False
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """서버 시작/종료 시 실행되는 라이프사이클 관리"""
+    # Startup
+    global rag_system, rag_initialized
+    try:
+        print("🚀 서버 시작 중... RAG 시스템 초기화")
+        from src.rag import get_rag_system as _get_rag
+        rag_system = _get_rag()
+        rag_initialized = True
+        print("✅ RAG 시스템 초기화 완료!")
+    except Exception as e:
+        print(f"❌ RAG 시스템 초기화 실패: {e}")
+        rag_initialized = False
+
+    yield
+
+    # Shutdown
+    print("🛑 서버 종료 중...")
+
 
 app = FastAPI(
     title="PathFinder API",
     description="LangChain 기반 고등학생 대학 학과 추천 서비스",
-    version="2.0.0"
+    version="2.0.0",
+    lifespan=lifespan
 )
-
-# RAG 시스템 (지연 로딩)
-rag_system = None
 
 
 def get_rag_system():
-    """RAG 시스템을 초기화하고 반환합니다 (싱글톤 패턴)"""
+    """RAG 시스템을 반환합니다"""
     global rag_system
-    if rag_system is None:
-        try:
-            from src.rag import get_rag_system as _get_rag
-            rag_system = _get_rag()
-        except Exception as e:
-            raise HTTPException(
-                status_code=503,
-                detail=f"RAG 시스템 초기화 실패: {str(e)}"
-            )
+    if not rag_initialized or rag_system is None:
+        raise HTTPException(
+            status_code=503,
+            detail="RAG 시스템이 아직 초기화되지 않았습니다"
+        )
     return rag_system
 
 
@@ -93,22 +114,15 @@ def root():
 @app.get("/health")
 def health_check():
     """서비스 헬스 체크"""
-    try:
-        rag = get_rag_system()
-        health = rag.health_check()
-
-        if health.get("status") == "healthy":
-            return {
-                "status": "healthy",
-                "rag_system": health
-            }
-        else:
-            raise HTTPException(status_code=503, detail="RAG 시스템 불안정")
-
-    except Exception as e:
+    if rag_initialized and rag_system is not None:
+        return {
+            "status": "healthy",
+            "rag_initialized": True
+        }
+    else:
         raise HTTPException(
             status_code=503,
-            detail=f"헬스 체크 실패: {str(e)}"
+            detail="RAG 시스템이 초기화되지 않았습니다"
         )
 
 

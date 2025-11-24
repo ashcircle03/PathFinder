@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: pathfinder
+  labels:
+    app: pathfinder
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pathfinder
+      component: api
+  template:
+    metadata:
+      labels:
+        app: pathfinder
+        component: api
+    spec:
+      containers:
+      - name: api
+        image: pathfinder-api:latest
+        imagePullPolicy: Never  # Minikube 로컬 이미지 사용
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: OLLAMA_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: pathfinder-config
+              key: OLLAMA_HOST
+        - name: OLLAMA_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: pathfinder-config
+              key: OLLAMA_MODEL
+        - name: QDRANT_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: pathfinder-config
+              key: QDRANT_HOST
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
