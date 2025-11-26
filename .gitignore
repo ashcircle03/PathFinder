@@ -66,3 +66,7 @@ models/
 .coverage
 htmlcov/
 test_chat*.json
+
+# Personal data and test PDFs
+*.pdf
+test_school_record.pdf

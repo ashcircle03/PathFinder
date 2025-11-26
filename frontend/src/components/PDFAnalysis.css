@@ -1,0 +1,420 @@
+.pdf-analysis {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.pdf-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.pdf-header h2 {
+  font-size: 2rem;
+  margin-bottom: 10px;
+  color: #2c3e50;
+}
+
+.pdf-subtitle {
+  color: #7f8c8d;
+  font-size: 1rem;
+}
+
+/* File Upload */
+.pdf-upload-form {
+  margin-bottom: 30px;
+}
+
+.file-upload-area {
+  margin-bottom: 20px;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  border: 3px dashed #3498db;
+  border-radius: 12px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.file-label:hover {
+  background: #e3f2fd;
+  border-color: #2980b9;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+}
+
+.upload-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.upload-text strong {
+  font-size: 1.1rem;
+  color: #2c3e50;
+}
+
+.upload-text span {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+}
+
+.file-size {
+  color: #3498db !important;
+  font-weight: 600;
+}
+
+.analyze-button {
+  width: 100%;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.analyze-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Error */
+.pdf-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding: 20px;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.error-icon {
+  font-size: 2rem;
+}
+
+.error-content strong {
+  display: block;
+  color: #c53030;
+  margin-bottom: 5px;
+}
+
+.error-content p {
+  color: #742a2a;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* Progress */
+.analysis-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.progress-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.progress-sub {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #7f8c8d;
+  margin-top: 8px;
+}
+
+/* Results */
+.pdf-result {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.analysis-summary {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.analysis-summary h3 {
+  font-size: 1.5rem;
+  margin-bottom: 25px;
+  color: #27ae60;
+}
+
+.profile-section {
+  margin-bottom: 25px;
+}
+
+.profile-section h4 {
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.tag-blue {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.tag-green {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.tag-purple {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
+.tag-orange {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.profile-section.summary {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border-left: 4px solid #3498db;
+}
+
+.profile-section.summary p {
+  margin: 0;
+  line-height: 1.6;
+  color: #495057;
+}
+
+/* Recommendation */
+.recommendation-section {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.recommendation-section h3 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: #667eea;
+}
+
+.majors-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 25px;
+}
+
+.major-card-pdf {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+  transition: transform 0.2s;
+}
+
+.major-card-pdf:hover {
+  transform: translateX(5px);
+}
+
+.major-rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+  height: 35px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.major-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.reasoning-section {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.reasoning-section h4 {
+  margin-bottom: 12px;
+  color: #2c3e50;
+}
+
+.reasoning-section p {
+  margin: 0;
+  line-height: 1.7;
+  color: #495057;
+}
+
+/* Context */
+.context-section {
+  margin-top: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.context-section summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #3498db;
+  padding: 5px;
+}
+
+.context-section summary:hover {
+  color: #2980b9;
+}
+
+.context-list {
+  margin-top: 15px;
+  display: grid;
+  gap: 15px;
+}
+
+.context-item {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.context-item h5 {
+  margin-bottom: 8px;
+  color: #2c3e50;
+}
+
+.context-item p {
+  font-size: 0.9rem;
+  color: #7f8c8d;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.context-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword {
+  padding: 4px 10px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: #495057;
+}
+
+/* Reset Button */
+.reset-button-pdf {
+  width: 100%;
+  padding: 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reset-button-pdf:hover {
+  background: #667eea;
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pdf-analysis {
+    padding: 15px;
+  }
+
+  .pdf-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .file-label {
+    padding: 30px 20px;
+  }
+
+  .analysis-summary,
+  .recommendation-section {
+    padding: 20px;
+  }
+}

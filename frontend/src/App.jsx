@@ -2,10 +2,11 @@ import { useState } from 'react'
 import axios from 'axios'
 import ChatInterface from './components/ChatInterface'
 import RecommendationDetail from './components/RecommendationDetail'
+import PDFAnalysis from './components/PDFAnalysis'
 import './App.css'
 
 function App() {
-  const [mode, setMode] = useState('select') // 'select', 'quick', 'chat', 'detail'
+  const [mode, setMode] = useState('select') // 'select', 'quick', 'chat', 'pdf', 'detail'
   const [interests, setInterests] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -60,6 +61,13 @@ function App() {
           <div className="mode-selection">
             <h2>추천 방식을 선택해주세요</h2>
             <div className="mode-cards">
+              <div className="mode-card" onClick={() => setMode('pdf')}>
+                <div className="mode-icon">📄</div>
+                <h3>생활기록부 분석</h3>
+                <p>학교생활기록부 PDF를 업로드하여 자동 분석</p>
+                <span className="mode-time">2-3분 소요</span>
+              </div>
+
               <div className="mode-card" onClick={() => setMode('quick')}>
                 <div className="mode-icon">⚡</div>
                 <h3>빠른 추천</h3>
@@ -80,6 +88,21 @@ function App() {
             <p>Powered by LangChain, EXAONE-3.5, Qdrant</p>
           </footer>
         </div>
+      </div>
+    )
+  }
+
+  // PDF 분석 화면
+  if (mode === 'pdf') {
+    return (
+      <div className="container">
+        <button onClick={handleBackToSelect} className="back-to-select">
+          ← 돌아가기
+        </button>
+        <PDFAnalysis />
+        <footer>
+          <p>Powered by LangChain, EXAONE-3.5, Qdrant</p>
+        </footer>
       </div>
     )
   }

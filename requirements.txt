@@ -13,6 +13,7 @@ langchain-core==0.3.15
 # LangChain Integrations
 langchain-qdrant==0.1.4
 langchain-ollama==0.2.0
+langchain-huggingface==0.1.2
 
 # Vector Store & Embeddings
 qdrant-client==1.11.3
@@ -25,6 +26,13 @@ ollama==0.3.3
 aiohttp==3.9.5
 beautifulsoup4==4.12.3
 lxml==5.3.0
+
+# PDF Processing
+PyPDF2==3.0.1
+python-multipart==0.0.12  # For file upload support
+pdf2image==1.16.3  # PDF to image conversion for OCR
+pytesseract==0.3.10  # OCR engine
+Pillow==10.1.0  # Image processing
 
 # Advanced Retrieval & Evaluation
 rank-bm25==0.2.2

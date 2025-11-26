@@ -6,14 +6,11 @@ import json
 from typing import List, Dict, Any, Optional
 from langchain_qdrant import QdrantVectorStore
 from langchain_ollama import OllamaLLM
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.prompts import ChatPromptTemplate, PromptTemplate, FewShotPromptTemplate
-from langchain.chains import RetrievalQA
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.output_parsers import PydanticOutputParser
-from langchain.retrievers import EnsembleRetriever, ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain.retrievers import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from pydantic import BaseModel, Field
 
@@ -123,181 +120,97 @@ class MajorRecommendationRAG:
             weights=[0.6, 0.4]  # 의미 검색 60%, 키워드 검색 40%
         )
 
-        # 4. Multi-Query Retriever (쿼리 확장)
-        print("  🔄 Multi-Query Retriever 설정...")
+        # Ensemble Retriever를 최종 retriever로 사용
+        # (Multi-Query, Compression은 LLM 의존성이 높아 불안정하므로 제거)
+        self.retriever = ensemble_retriever
 
-        # Multi-Query용 프롬프트
-        multi_query_prompt = PromptTemplate(
-            input_variables=["question"],
-            template="""당신은 대학 학과 검색을 돕는 AI 어시스턴트입니다.
-학생의 관심사를 바탕으로 다양한 각도에서 3가지 검색 쿼리를 생성하세요.
-
-원본 질문: {question}
-
-다음 관점에서 쿼리를 작성하세요:
-1. 직접적인 키워드 중심 쿼리
-2. 관련 진로/직업 중심 쿼리
-3. 필요한 역량/과목 중심 쿼리
-
-검색 쿼리 (한 줄에 하나씩, 번호 없이):"""
-        )
-
-        multi_query_retriever = MultiQueryRetriever.from_llm(
-            retriever=ensemble_retriever,
-            llm=self.llm,
-            prompt=multi_query_prompt
-        )
-
-        # 5. Contextual Compression (노이즈 제거)
-        print("  🗜️ Compression Retriever 설정...")
-        compressor = LLMChainExtractor.from_llm(self.llm)
-
-        self.retriever = ContextualCompressionRetriever(
-            base_compressor=compressor,
-            base_retriever=multi_query_retriever
-        )
-
-        print("  ✅ Advanced Retriever 구성 완료!")
+        print("  ✅ Retriever 구성 완료!")
         print("     - Vector Search (Qdrant)")
         print("     - BM25 Keyword Search")
         print("     - Ensemble (60% Vector + 40% BM25)")
-        print("     - Multi-Query Expansion")
-        print("     - Contextual Compression")
 
     def _setup_prompts(self):
-        """프롬프트 템플릿 설정 (Few-Shot 예제 포함)"""
+        """프롬프트 템플릿 설정 (단순화된 버전)"""
 
-        # Few-Shot 예제들 - 올바른 JSON 형식을 보여주는 예제
-        examples = [
-            {
-                "context": """1. 컴퓨터공학과 (공학)
-   설명: 소프트웨어와 하드웨어의 이론과 응용을 연구하는 학과입니다.
-   키워드: 프로그래밍, 알고리즘, 소프트웨어 개발, 데이터구조, 네트워크
-   진로: 소프트웨어 엔지니어, 시스템 엔지니어, 데이터 과학자
-
-2. 인공지능학과 (공학)
-   설명: 인공지능, 머신러닝, 딥러닝 기술을 연구하고 개발하는 학과입니다.
-   키워드: AI, 머신러닝, 딥러닝, 자연어처리, 컴퓨터비전
-   진로: AI 연구원, 머신러닝 엔지니어, 데이터 사이언티스트""",
-                "question": "프로그래밍과 AI에 관심이 많아요. 수학도 좋아합니다.",
-                "output": """{
-  "recommended_majors": ["인공지능학과", "컴퓨터공학과", "데이터사이언스학과"],
-  "reasoning": "학생의 프로그래밍과 AI 관심사를 고려했을 때 인공지능학과가 가장 적합합니다. 머신러닝과 딥러닝을 심도있게 배울 수 있으며, 수학 실력을 활용할 수 있습니다. 컴퓨터공학과는 프로그래밍 기초를 탄탄히 다질 수 있으며, 데이터사이언스학과는 수학과 프로그래밍을 결합하여 데이터 분석 역량을 기를 수 있습니다."
-}"""
-            },
-            {
-                "context": """1. 심리학과 (인문사회)
-   설명: 인간의 마음과 행동을 과학적으로 연구하는 학과입니다.
-   키워드: 상담, 심리치료, 인간행동, 심리검사, 발달심리
-   진로: 상담심리사, 임상심리사, 조직심리 전문가
-
-2. 사회복지학과 (인문사회)
-   설명: 사회적 약자를 돕고 복지 정책을 연구하는 학과입니다.
-   키워드: 복지정책, 사회서비스, 지역사회, 노인복지, 아동복지
-   진로: 사회복지사, 복지정책 전문가, NGO 활동가""",
-                "question": "사람을 돕는 일에 관심이 있고, 상담에 흥미가 있습니다.",
-                "output": """{
-  "recommended_majors": ["심리학과", "사회복지학과", "상담학과"],
-  "reasoning": "사람을 돕고 상담에 관심이 있다면 심리학과에서 인간의 마음을 과학적으로 탐구하며 상담 전문가로 성장할 수 있습니다. 사회복지학과는 실질적인 도움을 제공하는 방법을 배우며 현장에서 바로 적용할 수 있는 실무 능력을 기를 수 있습니다. 상담학과는 전문 상담사로서의 역량을 집중적으로 개발할 수 있습니다."
-}"""
-            },
-            {
-                "context": """1. 경영학과 (상경)
-   설명: 기업 경영과 관리에 필요한 이론과 실무를 배우는 학과입니다.
-   키워드: 경영전략, 마케팅, 재무관리, 인사관리, 회계
-   진로: 경영 컨설턴트, 마케팅 전문가, 재무 분석가
-
-2. 경제학과 (상경)
-   설명: 경제 현상과 시장 원리를 분석하고 연구하는 학과입니다.
-   키워드: 거시경제, 미시경제, 금융, 시장분석, 경제정책
-   진로: 이코노미스트, 금융 애널리스트, 경제 연구원""",
-                "question": "리더십이 있고, 창업에 관심이 많습니다. 수익 모델 개발이 흥미로워요.",
-                "output": """{
-  "recommended_majors": ["경영학과", "경제학과", "창업학과"],
-  "reasoning": "리더십과 창업에 관심이 있다면 경영학과에서 기업 운영과 전략을 체계적으로 배울 수 있습니다. 경영학은 마케팅, 재무, 인사 등 창업에 필요한 모든 기능을 다루며 실무 중심 교육을 받을 수 있습니다. 경제학과는 시장 원리와 수익 모델을 분석하는 능력을 기를 수 있으며, 창업학과는 실제 창업 과정을 직접 경험하며 배울 수 있습니다."
-}"""
-            }
-        ]
-
-        # 예제 템플릿
-        example_template = """[검색된 학과 정보]
-{context}
-
-[학생 관심사]
-{question}
-
-답변:
-{output}"""
-
-        example_prompt = PromptTemplate(
-            input_variables=["context", "question", "output"],
-            template=example_template
-        )
-
-        # Few-Shot 프롬프트 구성
-        prefix = """당신은 한국의 대학 진학 상담 전문가입니다.
-제공된 학과 정보를 바탕으로, 학생에게 가장 적합한 학과를 추천해주세요.
-
-다음은 올바른 추천 형식의 예제들입니다:
-
-"""
-
-        suffix = """이제 다음 학생의 경우에 대해 위와 동일한 형식으로 추천해주세요:
+        # 단순한 프롬프트 템플릿 사용
+        template = """당신은 한국의 대학 진학 상담 전문가입니다.
+학생의 관심사를 분석하여 가장 적합한 학과를 추천해주세요.
 
 [검색된 학과 정보]
 {context}
 
-[학생 관심사]
+[학생 정보]
 {question}
 
-중요 규칙:
-- 반드시 검색된 학과 정보 내에서만 추천하세요
-- 존재하지 않는 학과를 만들어내지 마세요
-- 순수 한글로만 답변하세요 (한자 사용 금지)
-- 정확히 JSON 형식으로 답변하세요
+위 학과 정보를 바탕으로 학생에게 3-5개의 학과를 추천하고, 각 학과를 왜 추천하는지 상세히 설명해주세요.
 
-{format_instructions}
+반드시 아래 JSON 형식으로만 답변하세요. 다른 텍스트는 포함하지 마세요:
+{{{{
+  "recommended_majors": ["학과1", "학과2", "학과3"],
+  "reasoning": "추천 이유를 여기에 작성하세요. 각 학과가 학생에게 적합한 이유를 설명합니다."
+}}}}
 
 답변:"""
 
-        self.prompt = FewShotPromptTemplate(
-            examples=examples,
-            example_prompt=example_prompt,
-            prefix=prefix,
-            suffix=suffix,
+        self.prompt = PromptTemplate(
             input_variables=["context", "question"],
-            partial_variables={
-                "format_instructions": self.output_parser.get_format_instructions()
-            }
+            template=template
         )
 
     def search_similar_majors(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         사용자의 관심사와 유사한 학과를 검색합니다.
+        중복 학과를 제거하고 다양한 학과를 반환합니다.
 
         Args:
             query: 사용자의 관심사 문자열
             top_k: 반환할 상위 결과 개수
 
         Returns:
-            유사한 학과 정보 리스트
+            유사한 학과 정보 리스트 (중복 제거됨)
         """
-        # LangChain retriever를 통한 검색
-        docs = self.retriever.get_relevant_documents(query)[:top_k]
+        # LangChain retriever를 통한 검색 (invoke 사용)
+        print(f"🔍 검색 쿼리: {query}")
+        # 더 많이 검색해서 중복 제거 후 top_k 반환
+        docs = self.retriever.invoke(query)[:top_k * 3]
+        print(f"📄 검색 결과: {len(docs)}개 문서 (중복 제거 전)")
 
         results = []
+        seen_majors = set()  # 중복 체크용
+        
         for doc in docs:
+            major_name = doc.metadata.get("name", "")
+            university = doc.metadata.get("university", "")  # 대학명
+            
+            # 대학명이 있으면 "대학 + 학과" 형식으로, 없으면 학과명만
+            if university:
+                display_name = f"{university} {major_name}"
+            else:
+                display_name = major_name
+            
+            # 같은 학과명은 한 번만 포함 (다양성 확보)
+            if major_name in seen_majors:
+                continue
+            seen_majors.add(major_name)
+            
             results.append({
                 "score": doc.metadata.get("_score", 0.0),
-                "major_name": doc.metadata.get("name", ""),
+                "major_name": major_name,
+                "university": university,
+                "display_name": display_name,
                 "category": doc.metadata.get("category", ""),
                 "description": doc.page_content,
                 "keywords": doc.metadata.get("keywords", []),
-                "career_paths": doc.metadata.get("career_paths", []),
+                "career_paths": doc.metadata.get("career_paths", []) or doc.metadata.get("career_prospects", []),
                 "related_subjects": doc.metadata.get("related_subjects", []),
                 "skills_required": doc.metadata.get("skills_required", [])
             })
-
+            
+            # 충분한 다양한 학과를 찾으면 중단
+            if len(results) >= top_k:
+                break
+        
+        print(f"✅ 최종 결과: {len(results)}개 학과 (중복 제거 후)")
         return results
 
     def generate_recommendation(
@@ -319,14 +232,20 @@ class MajorRecommendationRAG:
         if search_results is None:
             search_results = self.search_similar_majors(interests)
 
-        # 컨텍스트 구성
+        # 컨텍스트 구성 (대학명 포함)
         context_parts = []
         for idx, result in enumerate(search_results, 1):
+            display = result.get('display_name', result['major_name'])
+            career_paths = result.get('career_paths', [])
+            career_str = ', '.join(career_paths[:3]) if career_paths else '다양한 진로 가능'
+            keywords = result.get('keywords', [])
+            keywords_str = ', '.join(keywords[:5]) if keywords else ''
+            
             context_parts.append(
-                f"{idx}. {result['major_name']} ({result['category']})\n"
-                f"   설명: {result['description']}\n"
-                f"   키워드: {', '.join(result['keywords'][:5])}\n"
-                f"   진로: {', '.join(result['career_paths'][:3])}"
+                f"{idx}. {display} ({result['category']})\n"
+                f"   설명: {result['description'][:200]}...\n"
+                f"   키워드: {keywords_str}\n"
+                f"   진로: {career_str}"
             )
 
         context = "\n\n".join(context_parts)
@@ -334,7 +253,10 @@ class MajorRecommendationRAG:
         try:
             # LLM을 통한 추천 생성
             prompt_text = self.prompt.format(context=context, question=interests)
+            print(f"📝 프롬프트 길이: {len(prompt_text)} 글자")
             response = self.llm.invoke(prompt_text)
+            print(f"🤖 LLM 응답 길이: {len(response)} 글자")
+            print(f"🤖 LLM 응답 미리보기: {response[:500]}...")
 
             # Output Parser를 통한 파싱 시도
             try:
@@ -345,20 +267,39 @@ class MajorRecommendationRAG:
                     "retrieved_context": search_results
                 }
             except Exception as parse_error:
-                # 파싱 실패 시 fallback: 검색된 학과명 사용
-                print(f"⚠️ Output 파싱 실패, fallback 사용: {parse_error}")
+                print(f"⚠️ Pydantic 파싱 실패: {parse_error}")
+                
+                # JSON 직접 파싱 시도
+                import re
+                json_match = re.search(r'\{[^{}]*"recommended_majors"[^{}]*\}', response, re.DOTALL)
+                if json_match:
+                    try:
+                        import json
+                        parsed_json = json.loads(json_match.group())
+                        return {
+                            "recommended_majors": parsed_json.get("recommended_majors", []),
+                            "reasoning": parsed_json.get("reasoning", response),
+                            "retrieved_context": search_results
+                        }
+                    except json.JSONDecodeError:
+                        pass
+                
+                # 최종 fallback: 검색된 학과명 사용
+                print(f"⚠️ JSON 파싱도 실패, fallback 사용")
                 return {
                     "recommended_majors": [r['major_name'] for r in search_results[:5]],
-                    "reasoning": response,
+                    "reasoning": response if response else "검색된 학과를 기반으로 추천합니다.",
                     "retrieved_context": search_results
                 }
 
         except Exception as e:
             # LLM 호출 실패 시 검색 결과만 반환
-            print(f"❌ LLM 생성 실패: {e}")
+            import traceback
+            print(f"❌ LLM 생성 실패: {type(e).__name__}: {e}")
+            print(f"❌ 상세 에러:\n{traceback.format_exc()}")
             return {
                 "recommended_majors": [r['major_name'] for r in search_results[:5]],
-                "reasoning": f"검색된 학과를 기반으로 추천합니다. (LLM 오류: {str(e)})",
+                "reasoning": f"검색된 학과를 기반으로 추천합니다.",
                 "retrieved_context": search_results
             }
 
@@ -384,26 +325,19 @@ class MajorRecommendationRAG:
     def health_check(self) -> Dict[str, Any]:
         """RAG 시스템의 상태를 확인합니다."""
         try:
-            # Qdrant 연결 확인
-            from qdrant_client import QdrantClient
-            qdrant_client = QdrantClient(url=self.vectorstore._client._host)
-            collection_info = qdrant_client.get_collection(self.collection_name)
-
             # 임베딩 모델 테스트
             test_embedding = self.embeddings.embed_query("테스트")
-
-            # LLM 테스트
-            test_response = self.llm.invoke("안녕하세요")
-
+            
+            # Retriever 테스트 (간단한 검색)
+            test_docs = self.retriever.invoke("컴퓨터")
+            
             return {
                 "status": "healthy",
-                "vectorstore": "connected",
-                "collection_name": self.collection_name,
-                "vectors_count": collection_info.points_count,
                 "embedding_model": "jhgan/ko-sroberta-multitask",
                 "embedding_dim": len(test_embedding),
                 "llm_model": self.llm_model,
-                "llm_status": "ok" if test_response else "error"
+                "retriever_status": "ok" if test_docs else "no_results",
+                "collection_name": self.collection_name
             }
         except Exception as e:
             return {

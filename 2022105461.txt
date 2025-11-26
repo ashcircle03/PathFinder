@@ -1,2 +1,21 @@
-https://hub.docker.com/r/ashcircle03/pathfinder-api
-https://hub.docker.com/r/ashcircle03/pathfinder-frontend
+# PathFinder Project - Docker Hub Repository URLs
+# 학번: 2022105461
+# 업로드 일시: 2025-11-26
+
+## 직접 만든 이미지 (Custom Images)
+1. API Server (FastAPI + LangChain RAG)
+   https://hub.docker.com/r/ashcircle03/pathfinder-api
+
+2. Frontend (React + Vite + Nginx)
+   https://hub.docker.com/r/ashcircle03/pathfinder-frontend
+
+## 사용한 외부 이미지 (Third-party Images)
+3. Ollama (LLM 서버)
+   https://hub.docker.com/r/ollama/ollama
+
+4. Qdrant (벡터 데이터베이스)
+   https://hub.docker.com/r/qdrant/qdrant
+
+## Pod 간 통신 구조
+Frontend Pod → API Pod → Ollama Pod (LLM 추론)
+                      → Qdrant Pod (벡터 검색)

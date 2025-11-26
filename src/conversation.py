@@ -38,16 +38,6 @@ class StudentProfile(BaseModel):
     )
 
 
-class ConversationResponse(BaseModel):
-    """대화 응답 모델"""
-    response: str = Field(description="상담사의 응답")
-    next_question: Optional[str] = Field(description="다음 질문 (선택사항)", default=None)
-    is_ready_to_recommend: bool = Field(
-        description="학과 추천을 할 수 있는 충분한 정보가 수집되었는지 여부",
-        default=False
-    )
-
-
 class CareerCounselorConversation:
     """대화형 진로 상담 시스템"""
 

@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: pathfinder-api:v2.1.0
+        image: pathfinder-api:v2.5.0
         imagePullPolicy: Never  # Minikube 로컬 이미지 사용
         ports:
         - containerPort: 8000
@@ -46,20 +46,13 @@ spec:
             secretKeyRef:
               name: langsmith-secret
               key: LANGCHAIN_API_KEY
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1"
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 120
           periodSeconds: 10
-          timeoutSeconds: 5
+          timeoutSeconds: 30  # PDF 처리 중에도 응답 가능하도록 증가
           failureThreshold: 3
         readinessProbe:
           httpGet:
@@ -67,7 +60,7 @@ spec:
             port: 8000
           initialDelaySeconds: 60
           periodSeconds: 10
-          timeoutSeconds: 5
+          timeoutSeconds: 30  # PDF 처리 중에도 응답 가능하도록 증가
           failureThreshold: 3
         startupProbe:
           httpGet:
@@ -75,5 +68,5 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          timeoutSeconds: 5
+          timeoutSeconds: 30  # 초기 시작 시간 충분히 확보
           failureThreshold: 30

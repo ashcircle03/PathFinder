@@ -2,7 +2,7 @@
 PathFinder API - LangChain 기반 학과 추천 서비스
 """
 import os
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from pydantic import BaseModel
 import uuid
 from typing import List, Dict, Any, Optional
@@ -85,6 +85,13 @@ class RecommendationResponse(BaseModel):
     recommended_majors: List[str]
     reasoning: str
     retrieved_context: Optional[List[Dict[str, Any]]] = None
+    # PDF 분석 결과 (선택적)
+    academic_strengths: Optional[List[str]] = None
+    extracurricular_activities: Optional[List[str]] = None
+    personality_traits: Optional[List[str]] = None
+    career_interests: Optional[List[str]] = None
+    teacher_observations: Optional[List[str]] = None
+    recommended_interests_summary: Optional[str] = None
 
 
 class ChatRequest(BaseModel):
@@ -108,6 +115,18 @@ class ChatResponse(BaseModel):
     is_ready_to_recommend: bool
     conversation_count: int
     collected_info: Optional[Dict[str, Any]] = None
+
+
+class SchoolRecordAnalysisResponse(BaseModel):
+    """학교생활기록부 분석 응답"""
+    analysis_id: str
+    academic_strengths: List[str]
+    extracurricular_activities: List[str]
+    personality_traits: List[str]
+    career_interests: List[str]
+    teacher_observations: List[str]
+    recommended_interests_summary: str
+    interests_text: str  # RAG 시스템에 전달할 텍스트
 
 
 # ===== API Endpoints =====
@@ -295,6 +314,141 @@ async def delete_chat_session(session_id: str):
         )
 
 
+# ===== School Record Analysis Endpoints =====
+
+@app.post("/analyze-school-record", response_model=SchoolRecordAnalysisResponse)
+async def analyze_school_record(file: UploadFile = File(...)):
+    """
+    학교생활기록부 PDF 업로드 및 분석
+
+    - PDF에서 텍스트 추출
+    - LLM으로 학생 프로필 자동 분석
+    - 학과 추천에 필요한 정보 구조화
+
+    이 방식은 학생이 직접 자신의 관심사를 답변하는 부담을 없애고,
+    객관적인 학교 기록을 기반으로 추천을 제공합니다.
+    """
+    analysis_id = str(uuid.uuid4())
+
+    try:
+        # 파일 타입 검증
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="PDF 파일만 업로드 가능합니다"
+            )
+
+        # PDF 내용 읽기
+        pdf_content = await file.read()
+
+        if len(pdf_content) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="빈 파일입니다"
+            )
+
+        # 파서 가져오기 및 분석
+        from src.school_record_parser import get_parser
+        parser = get_parser()
+
+        profile = parser.analyze_school_record(pdf_content)
+
+        # RAG 시스템에 전달할 텍스트 생성
+        interests_text = parser.profile_to_interests_text(profile)
+
+        return SchoolRecordAnalysisResponse(
+            analysis_id=analysis_id,
+            academic_strengths=profile.academic_strengths,
+            extracurricular_activities=profile.extracurricular_activities,
+            personality_traits=profile.personality_traits,
+            career_interests=profile.career_interests,
+            teacher_observations=profile.teacher_observations,
+            recommended_interests_summary=profile.recommended_interests_summary,
+            interests_text=interests_text
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"학교생활기록부 분석 실패: {str(e)}"
+        )
+
+
+@app.post("/analyze-and-recommend", response_model=RecommendationResponse)
+async def analyze_and_recommend(file: UploadFile = File(...)):
+    """
+    학교생활기록부 분석 및 학과 추천 (원스텝)
+
+    - PDF 업로드 즉시 분석 + 추천 제공
+    - 학생이 별도의 입력 없이 바로 추천 결과 확인 가능
+    """
+    recommendation_id = str(uuid.uuid4())
+
+    try:
+        # 파일 타입 검증
+        if not file.filename.lower().endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="PDF 파일만 업로드 가능합니다"
+            )
+
+        # PDF 내용 읽기
+        pdf_content = await file.read()
+
+        if len(pdf_content) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="빈 파일입니다"
+            )
+
+        # 파서 가져오기 및 분석
+        from src.school_record_parser import get_parser
+        parser = get_parser()
+
+        profile = parser.analyze_school_record(pdf_content)
+
+        # RAG 시스템에 전달할 텍스트 생성
+        interests_text = parser.profile_to_interests_text(profile)
+
+        # RAG 시스템으로 학과 추천
+        rag = get_rag_system()
+        result = rag.recommend_majors(interests_text, top_k=5)
+
+        return RecommendationResponse(
+            recommendation_id=recommendation_id,
+            recommended_majors=result["recommended_majors"],
+            reasoning=result["reasoning"],
+            retrieved_context=result.get("retrieved_context"),
+            # 프로필 정보 추가
+            academic_strengths=profile.academic_strengths,
+            extracurricular_activities=profile.extracurricular_activities,
+            personality_traits=profile.personality_traits,
+            career_interests=profile.career_interests,
+            teacher_observations=profile.teacher_observations,
+            recommended_interests_summary=profile.recommended_interests_summary
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"학교생활기록부 기반 추천 실패: {str(e)}"
+        )
+
+
 @app.get("/chat/{session_id}/history")
 async def get_chat_history(session_id: str):
     """대화 세션의 히스토리 조회"""
@@ -325,13 +479,26 @@ async def get_prompt_template():
     try:
         rag = get_rag_system()
         return {
-            "template": rag.rag_template,
+            "template": rag.prompt.template,
             "model": rag.llm_model
         }
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"프롬프트 조회 실패: {str(e)}"
+        )
+
+
+@app.get("/debug/health")
+async def detailed_health_check():
+    """상세 헬스 체크 (개발용) - RAG 시스템 구성요소 상태"""
+    try:
+        rag = get_rag_system()
+        return rag.health_check()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"상세 헬스체크 실패: {str(e)}"
         )
 
 
